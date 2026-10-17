@@ -26,15 +26,32 @@ function loadShapes() {
 }
 const STYLE_URLS = ["https://tiles.openfreemap.org/styles/positron", "https://tiles.openfreemap.org/styles/liberty"];
 
+const LAND = "#d4e2d2";
+const SEA = "#c9dcf0";
+
 const FALLBACK: StyleSpecification = {
   version: 8,
   sources: { countries: { type: "geojson", data: "/countries.geojson" } },
   layers: [
-    { id: "bg", type: "background", paint: { "background-color": "#d5e5f6" } },
-    { id: "land", type: "fill", source: "countries", paint: { "fill-color": "#ffffff" } },
-    { id: "borders", type: "line", source: "countries", paint: { "line-color": "#c9d2e1", "line-width": 0.8 } },
+    { id: "bg", type: "background", paint: { "background-color": SEA } },
+    { id: "land", type: "fill", source: "countries", paint: { "fill-color": LAND } },
+    { id: "borders", type: "line", source: "countries", paint: { "line-color": "#c5d0c4", "line-width": 0.8 } },
   ],
 };
+
+/** Pale green land and pale blue sea on the OpenFreeMap style. Missing layers are skipped. */
+function tintEarth(map: maplibregl.Map) {
+  const set = (id: string, prop: string, value: string) => {
+    if (!map.getLayer(id)) return;
+    try { map.setPaintProperty(id, prop, value); } catch {}
+  };
+  set("background", "background-color", LAND);
+  set("water", "fill-color", SEA);
+  set("waterway", "line-color", "#b7cce6");
+  set("park", "fill-color", "#c5d6c2");
+  set("landcover_wood", "fill-color", "#c2d3be");
+  set("landuse_residential", "fill-color", "#d0dccf");
+}
 
 /** A geographic circle, so the halo stays the same size on the ground as you zoom. */
 function circleRing(center: [number, number], radiusKm: number, steps = 72): [number, number][] {
@@ -122,6 +139,7 @@ export default function MapView({ onLevel }: { onLevel: (l: "world" | "local") =
 
       map.on("style.load", () => {
         try { map.setProjection({ type: "globe" }); } catch {}
+        tintEarth(map);
         try {
           map.setSky({
             "sky-color": "#eaf2fc", "horizon-color": "#ffffff", "fog-color": "#f5f7fb",
