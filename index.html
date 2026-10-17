@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Pinwire — World news, made simple</title>
+  <meta name="description" content="Explore world news on a 3D map. Tap a flag for a country's news, zoom in for local stories — all in plain English." />
+  <meta name="theme-color" content="#0a0e17" />
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="vendor/maplibre-gl.css" />
+  <link rel="stylesheet" href="css/styles.css" />
+  <script>
+    try { const t = localStorage.getItem("pw-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#list-view">Skip to the news list</a>
+
+  <header class="topbar" role="banner">
+    <a class="brand" href="#/" aria-label="Pinwire home">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="13" r="9" fill="none" stroke="currentColor" stroke-width="2.5"/><path d="M16 22v8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="16" cy="13" r="3.5" fill="var(--accent)"/></svg>
+      <span>Pinwire</span>
+    </a>
+
+    <div class="search" role="search">
+      <label for="search-input" class="sr-only">Search a country or city</label>
+      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <input id="search-input" type="search" placeholder="Search a country or city" autocomplete="off"
+             role="combobox" aria-expanded="false" aria-controls="search-results" aria-autocomplete="list" />
+      <ul id="search-results" class="search-results" role="listbox" hidden></ul>
+    </div>
+
+    <div class="top-actions">
+      <button class="icon-btn" id="list-toggle" aria-pressed="false" aria-controls="list-view" title="List view">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span class="btn-label">List</span>
+      </button>
+      <button class="icon-btn" id="theme-toggle" aria-label="Switch to light theme" title="Theme">
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main">
+    <h1 class="sr-only">Pinwire — world news on a map</h1>
+
+    <!-- Map (visual). Every pin is also a keyboard-focusable button. -->
+    <section id="map" class="map" aria-label="Interactive world map. Use Tab to move between country flags and local story pins."></section>
+
+    <div class="zoom-hint" id="zoom-hint" aria-live="polite">
+      <span class="dot" aria-hidden="true"></span>
+      <span id="zoom-hint-text">Tap a flag to read that country's news</span>
+    </div>
+
+    <div class="map-controls" role="group" aria-label="Map controls">
+      <button class="ctrl" id="zoom-in" aria-label="Zoom in">+</button>
+      <button class="ctrl" id="zoom-out" aria-label="Zoom out">−</button>
+      <button class="ctrl" id="reset-view" aria-label="Back to world view">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+      </button>
+    </div>
+
+    <!-- Accessible list alternative to the map -->
+    <section id="list-view" class="list-view" aria-labelledby="list-title" tabindex="-1" hidden>
+      <div class="list-inner">
+        <h2 id="list-title">All countries</h2>
+        <p class="muted">The same news as the map, in a simple list.</p>
+        <ul id="country-list" class="country-list"></ul>
+      </div>
+    </section>
+
+    <!-- Country panel -->
+    <aside id="country-panel" class="panel" aria-labelledby="panel-title" hidden>
+      <div class="panel-grab" aria-hidden="true"></div>
+      <header class="panel-head">
+        <img id="panel-flag" class="flag-lg" alt="" />
+        <div>
+          <p class="eyebrow" id="panel-eyebrow">Country</p>
+          <h2 id="panel-title" tabindex="-1">Country</h2>
+        </div>
+        <button class="icon-btn close" id="panel-close" aria-label="Close country news">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </header>
+      <div class="tabs" role="tablist" aria-label="Sort stories">
+        <button role="tab" class="tab" aria-selected="true" data-sort="top">Top</button>
+        <button role="tab" class="tab" aria-selected="false" data-sort="new">Newest</button>
+      </div>
+      <div class="places-row" id="places-row" aria-label="Local places"></div>
+      <ol id="panel-stories" class="story-list"></ol>
+    </aside>
+  </main>
+
+  <!-- Story viewer (Snapchat-style) -->
+  <div id="viewer" class="viewer" role="dialog" aria-modal="true" aria-labelledby="viewer-place" hidden>
+    <div class="viewer-card">
+      <div class="progress" id="viewer-progress" aria-hidden="true"></div>
+      <header class="viewer-head">
+        <img id="viewer-flag" class="flag-sm" alt="" />
+        <div class="viewer-meta">
+          <h2 id="viewer-place">Place</h2>
+          <p id="viewer-sub" class="muted"></p>
+        </div>
+        <button class="icon-btn" id="viewer-pause" aria-label="Pause stories" aria-pressed="false">
+          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7z" fill="currentColor"/></svg>
+        </button>
+        <button class="icon-btn" id="viewer-close" aria-label="Close stories">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </header>
+      <div class="viewer-body" id="viewer-body" aria-live="polite"></div>
+      <button class="tap-zone left" id="viewer-prev" aria-label="Previous story"></button>
+      <button class="tap-zone right" id="viewer-next" aria-label="Next story"></button>
+    </div>
+  </div>
+
+  <!-- Article detail sheet -->
+  <div id="article" class="sheet-backdrop" hidden>
+    <article class="sheet" role="dialog" aria-modal="true" aria-labelledby="article-title">
+      <div class="panel-grab" aria-hidden="true"></div>
+      <button class="icon-btn close sheet-close" id="article-close" aria-label="Close story">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <div id="article-content"></div>
+    </article>
+  </div>
+
+  <!-- First-visit welcome -->
+  <div id="welcome" class="welcome" role="dialog" aria-modal="true" aria-labelledby="welcome-title" hidden>
+    <div class="welcome-card">
+      <h2 id="welcome-title">World news, <em>made simple.</em></h2>
+      <ol class="steps">
+        <li><span class="step-n">1</span><span>Tap a <strong>flag</strong> to see a country's news.</span></li>
+        <li><span class="step-n">2</span><span><strong>Zoom in</strong> to find local stories near a city.</span></li>
+        <li><span class="step-n">3</span><span><strong>Vote</strong> and <strong>comment</strong> on what matters to you.</span></li>
+      </ol>
+      <p class="fine">All stories are <strong>sample placeholders</strong> in this prototype. By continuing you agree to our <a href="terms.html">Terms</a> and <a href="privacy.html">Privacy Policy</a>.</p>
+      <button class="btn primary" id="welcome-go">Start exploring</button>
+    </div>
+  </div>
+
+  <footer class="legal-links">
+    <a href="terms.html">Terms</a><span aria-hidden="true">·</span>
+    <a href="privacy.html">Privacy</a><span aria-hidden="true">·</span>
+    <a href="accessibility.html">Accessibility</a>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="vendor/maplibre-gl.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
