@@ -1,0 +1,131 @@
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+/* ------------------------------------------------------------
+   Pinwire — "daylight atlas"
+   Light, airy map; navy ink; a yellow highlighter is the one
+   signature move (plain-English headlines get highlighted).
+   All text colors meet WCAG AA on their backgrounds.
+------------------------------------------------------------- */
+:root {
+  --paper: #f5f7fb;
+  --surface: #ffffff;
+  --ink: #12213d;
+  --muted: #56637d;
+  --line: #e2e7f0;
+  --line-strong: #c9d2e1;
+  --sea: #d5e5f6;
+  --cobalt: #2448d8;
+  --cobalt-soft: #e8edff;
+  --mark: #ffe25c;
+  --up: #0b8a4f;
+  --down: #c7303f;
+  --trust: #0d6b42; --trust-bg: #e7f6ee; --trust-line: #bfe6d0;
+  --warn: #8a4b00;  --warn-bg: #fff3dc; --warn-line: #f5d79e;
+  --flag: #b0202f;  --flag-bg: #fdeaec; --flag-line: #f5c2c8;
+  --shadow-lg: 0 24px 60px -20px rgba(18, 33, 61, 0.28), 0 2px 6px rgba(18, 33, 61, 0.06);
+  --shadow-sm: 0 1px 2px rgba(18, 33, 61, 0.08), 0 4px 14px -6px rgba(18, 33, 61, 0.14);
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-cobalt: var(--cobalt);
+  --color-cobalt-soft: var(--cobalt-soft);
+  --color-mark: var(--mark);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque Variable", var(--font-geist-sans), system-ui, sans-serif;
+}
+
+html, body { height: 100%; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+.font-display { font-family: var(--font-display); font-optical-sizing: auto; letter-spacing: -0.02em; }
+
+:focus-visible { outline: 3px solid var(--cobalt); outline-offset: 2px; border-radius: 10px; }
+[tabindex="-1"]:focus { outline: none; }
+
+/* The highlighter: plain-English headline gets a hand-drawn yellow swipe */
+.mark {
+  background-image: linear-gradient(104deg, transparent 0.4em, var(--mark) 0.5em, var(--mark) calc(100% - 0.6em), transparent calc(100% - 0.4em));
+  background-repeat: no-repeat;
+  background-size: 0% 46%;
+  background-position: 0 88%;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  transition: background-size .55s var(--ease);
+  padding: 0 .12em;
+  margin: 0 -.12em;
+}
+.mark.on, a:hover .mark, button:hover .mark, button:focus-visible .mark { background-size: 100% 46%; }
+
+/* ---------- Map markers ---------- */
+.pw-flag span, .pw-local span { display: block; }
+.maplibregl-ctrl-attrib { font-size: 11px; }
+.pw-flag {
+  background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; display: grid; justify-items: center;
+  transform-origin: 50% 100%;
+  animation: pw-drop .6s var(--ease) both; animation-delay: var(--d, 0s);
+}
+.pw-flag .b {
+  width: 46px; height: 46px; border-radius: 999px; overflow: hidden; background: #fff;
+  border: 3px solid #fff; box-shadow: 0 8px 20px -6px rgba(18,33,61,.45);
+  transition: transform .25s var(--ease);
+}
+.pw-flag .b img { width: 100%; height: 100%; object-fit: cover; }
+.pw-flag .stem { width: 2px; height: 12px; background: var(--ink); opacity: .55; }
+.pw-flag .dot { width: 8px; height: 8px; border-radius: 99px; background: var(--ink); box-shadow: 0 0 0 4px rgba(18,33,61,.12); }
+.pw-flag .n {
+  position: absolute; top: -6px; right: -10px; min-width: 22px; height: 22px; padding: 0 6px;
+  border-radius: 99px; background: var(--ink); color: #fff; font: 700 11px/22px var(--font-sans); text-align: center;
+  border: 2px solid #fff;
+}
+.pw-flag .name {
+  position: absolute; top: 52px; left: 50%; translate: -50% 4px; white-space: nowrap;
+  font: 600 12px var(--font-sans); background: #fff; color: var(--ink);
+  padding: 3px 9px; border-radius: 99px; box-shadow: var(--shadow-sm);
+  opacity: 0; transition: .2s var(--ease); pointer-events: none;
+}
+.pw-flag:hover .b, .pw-flag:focus-visible .b { transform: translateY(-4px) scale(1.08); }
+.pw-flag:hover .name, .pw-flag:focus-visible .name { opacity: 1; translate: -50% 0; }
+.pw-flag:focus-visible .b { outline: 3px solid var(--cobalt); outline-offset: 2px; }
+.pw-flag.active .b { border-color: var(--mark); transform: scale(1.12); }
+
+.pw-local { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; display: grid; justify-items: center; gap: 4px; animation: pw-drop .5s var(--ease) both; animation-delay: var(--d, 0s); }
+.pw-local .ring {
+  width: 58px; height: 58px; border-radius: 99px; padding: 3px;
+  background: conic-gradient(from 210deg, var(--mark), #ff8a3d, #ff3d7f, var(--cobalt), var(--mark));
+  box-shadow: 0 10px 24px -8px rgba(18,33,61,.5);
+  transition: transform .2s var(--ease);
+}
+.pw-local.seen .ring { background: var(--line-strong); }
+.pw-local .in { width: 100%; height: 100%; border-radius: 99px; background: #fff; border: 3px solid #fff; display: grid; place-items: center; font-size: 24px; }
+.pw-local .lbl { font: 700 12px var(--font-sans); background: #fff; color: var(--ink); padding: 2px 9px; border-radius: 99px; box-shadow: var(--shadow-sm); white-space: nowrap; }
+.pw-local:hover .ring, .pw-local:focus-visible .ring { transform: scale(1.08); }
+.pw-local:focus-visible .ring { outline: 3px solid var(--cobalt); outline-offset: 3px; }
+
+[data-level="world"] .pw-local,
+[data-level="local"] .pw-flag { opacity: 0; scale: .5; pointer-events: none; visibility: hidden; transition: opacity .3s, scale .3s, visibility 0s .3s; }
+.pw-flag, .pw-local { transition: opacity .3s, scale .3s; }
+
+@keyframes pw-drop { from { opacity: 0; transform: translateY(-24px) scale(.7); } }
+@keyframes pw-pulse { 0% { transform: scale(1); opacity: .5; } 100% { transform: scale(2.6); opacity: 0; } }
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}

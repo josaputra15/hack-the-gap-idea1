@@ -1,53 +1,57 @@
 # Pinwire — world news on a 3D map (prototype)
 
-Tap a flag on the globe to read a country's news. Zoom in to see local, Snapchat-style story circles for cities. Every story has a plain-English headline, up/down votes, details, source, and comments.
+Tap a flag on the globe to read a country's news. Open the country **full screen** to browse, filter, vote and review. Zoom in to see local, Snapchat-style story circles for cities. Every story has a plain-English headline, up/down votes, details, its source, and community reviews with quick tags (like "Spam" or "Not reliable (government source)").
 
-> All news is **placeholder data** (`js/data.js`). Nothing is real yet.
+> All news is **placeholder data** (`lib/raw.json`). Nothing is real yet.
 
 ## Run locally
-No build step, no install. Any static server works:
-
 ```bash
-npx serve .          # or: python3 -m http.server 8000
+npm install
+npm run dev
 ```
-Open http://localhost:3000 (or :8000). Opening `index.html` directly from disk won't work because it uses ES modules.
+Open http://localhost:3000.
 
 ## Deploy to Vercel
-1. Push this folder to a GitHub repo.
-2. In Vercel: **Add New → Project → Import** the repo.
-3. Framework preset: **Other**. Leave build command and output directory empty.
-4. Deploy. (`vercel.json` adds clean URLs, caching and security headers.)
+Push to GitHub, then in Vercel choose **Add New → Project → Import**. Vercel detects Next.js automatically; no settings needed.
 
-Or from the terminal: `npx vercel` inside this folder.
+## Stack
+Next.js 15 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Motion (animations) · MapLibre GL (3D globe) · Zustand (state)
 
 ## Project structure
 ```
-index.html          App shell (map, panel, story viewer, article sheet)
-terms.html          Terms of Service (template — get it reviewed before launch)
-privacy.html        Privacy Policy (+ "delete my data" button)
-accessibility.html  WCAG 2.2 AA statement
-css/styles.css      All styles, dark + light themes, animations
-js/app.js           Map, markers, panels, votes, comments, search, routing
-js/data.js          Placeholder news  ← replace with a real API
-vendor/             MapLibre GL JS 5 (bundled, no CDN needed)
-assets/             Flags, favicon, offline world outline map
-vercel.json         Vercel config
+app/
+  page.tsx               Home (the map app)
+  terms/ privacy/ accessibility/   Legal pages
+  globals.css            Colors, highlighter effect, map marker styles
+components/
+  Pinwire.tsx            App shell: top bar + search, URL/back-button sync, "All countries", welcome
+  MapView.tsx            3D globe, flag pins, local story circles, fly-to
+  CountryPanel.tsx       Country drawer ↔ full-screen view (sort, topic filter, cards)
+  StoryModal.tsx         Story details, source, reviews (trust scale + quick tags + comments)
+  StoryViewer.tsx        Snapchat-style local stories
+  bits.tsx               Vote control, tag chips, trust badge, flag
+lib/
+  data.ts                Builds countries/places/stories from raw.json (+ sample reviews)
+  raw.json               Placeholder news  ← replace with a real API
+  tags.ts                Quick review tags (add or rename them here)
+  store.ts               Votes/reviews (saved in the browser) + navigation state
+public/                  Flags and an offline world outline map
 ```
 
 ## How it works
-- **Map:** MapLibre GL in globe projection with atmosphere. Tiles come from OpenFreeMap (free, no API key). If tiles can't load, it falls back to a bundled world outline so the app still works.
-- **Zoom levels:** below zoom 4.2 you see country flags; above it you see local story circles plus a "heat" glow. Change `LOCAL_ZOOM` in `js/app.js`.
-- **3D:** pitched camera when you fly into a city, plus 3D buildings at street level.
-- **Votes, comments, theme, seen stories:** saved in `localStorage` (per browser). No backend yet.
-- **Shareable links:** `#/c/jp` (country), `#/p/jp-tokyo` (local stories), `#/s/<story-id>` (article), `#/list`.
+- **Map:** MapLibre globe with OpenFreeMap "Positron" tiles (free, no API key). If tiles can't load it falls back to a bundled outline map.
+- **Zoom levels:** below zoom 4.2 you see flags; above it you see local story circles. Change `LOCAL_ZOOM` in `components/MapView.tsx`.
+- **Shareable URLs:** `?c=jp` (country), `?c=jp&view=full` (full screen), `?c=jp&p=jp-tokyo` (local stories), `?s=<story-id>` (a story). The browser Back button closes the top layer.
+- **Votes and reviews** are saved in `localStorage` (per browser). There's no backend yet.
 
-## Swapping in real news
-Keep the shape `data.js` exports (`COUNTRIES`, each with `stories` and `places[].stories`). A story needs:
-`id, category, headline (plain English), original, points[], why, body, source{name,url}, hoursAgo, score, comments[]`.
-Good next steps: a small API route (Vercel Functions) that pulls from a news API, an LLM step to rewrite headlines in simple English, and a database (Supabase / Vercel Postgres) for shared votes and comments.
+## Next steps
+1. Replace `lib/raw.json` with an API route (`app/api/news/route.ts`) that pulls from a news API.
+2. Use an LLM to rewrite headlines into simple English.
+3. Store votes and reviews in a database (Supabase, Neon, or Vercel Postgres) so everyone sees them.
+4. Add moderation for reports from the "Report it" tags.
 
 ## Accessibility (WCAG 2.2 AA)
-Skip link, full keyboard support (Tab/Enter/Esc, ←/→ and Space in stories), focus trapping in dialogs, list view as a non-map alternative, screen-reader labels and live regions, pause control for auto-advancing stories, `prefers-reduced-motion` support, AA contrast in both themes, 44px touch targets.
+Skip link, full keyboard support, focus trapping in dialogs, a list view as a non-map alternative, screen-reader labels and live regions, pause control for auto-advancing stories, `prefers-reduced-motion` support, AA contrast, trust shown with icons and words (not only color), and 44px touch targets.
 
 ## Credits
-Map © OpenStreetMap contributors · OpenFreeMap · MapLibre (BSD-3) · Flags: flag-icons (MIT) · Country shapes: Natural Earth via world-atlas (public domain).
+Map © OpenStreetMap contributors · OpenFreeMap · MapLibre (BSD-3) · Flags: flag-icons (MIT) · Country shapes: Natural Earth (public domain).
