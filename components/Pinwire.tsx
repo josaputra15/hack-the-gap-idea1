@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import { Search, Plus, Minus, Globe2, LayoutGrid, Sparkles, X } from "lucide-react";
-import { APP_NAME, COUNTRIES, PLACE_INDEX } from "@/lib/data";
+import { APP_NAME, COUNTRIES, COUNTRY_INDEX, PLACE_INDEX } from "@/lib/data";
 import { useNav, useUser, navToSearch, searchToNav, type Nav } from "@/lib/store";
 import { mapRef, flyHome } from "@/lib/mapRef";
 import CountryPanel from "./CountryPanel";
@@ -123,6 +123,7 @@ type Row = { kind: "item"; item: Item } | { kind: "ask"; text: string };
 function TopBar({ onGrid }: { onGrid: () => void }) {
   const go = useNav((s) => s.go);
   const reset = useNav((s) => s.reset);
+  const countryName = useNav((s) => (s.country ? COUNTRY_INDEX.get(s.country)?.name : undefined));
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
   const [open, setOpen] = useState(false);
@@ -152,9 +153,11 @@ function TopBar({ onGrid }: { onGrid: () => void }) {
       initial={{ y: -30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200, damping: 24, delay: 0.1 }}
       className="fixed inset-x-3 top-3 z-20 flex items-center gap-2 rounded-full border border-line bg-surface/90 py-1.5 pl-4 pr-1.5 shadow-[var(--shadow-sm)] backdrop-blur-md md:inset-x-4 md:top-4"
     >
-      <button onClick={() => { reset(); flyHome(); }} className="flex shrink-0 items-center gap-2 rounded-full pr-2" aria-label={`${APP_NAME} home`}>
-        <svg viewBox="0 0 32 32" className="size-7" aria-hidden="true"><circle cx="16" cy="13" r="9" fill="none" stroke="currentColor" strokeWidth="2.6" /><path d="M16 22v8" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" /><circle cx="16" cy="13" r="4" fill="var(--mark)" stroke="currentColor" strokeWidth="1.5" /></svg>
-        <span className="hidden whitespace-nowrap font-display text-lg font-bold sm:inline lg:text-xl">{APP_NAME}</span>
+      <button onClick={() => { reset(); flyHome(); }} className="flex shrink-0 items-center gap-2 rounded-full pr-2" aria-label={countryName ? `What's going on with ${countryName}? Home` : `${APP_NAME} home`}>
+        <svg viewBox="0 0 32 32" className="size-7 shrink-0" aria-hidden="true"><circle cx="16" cy="13" r="9" fill="none" stroke="currentColor" strokeWidth="2.6" /><path d="M16 22v8" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" /><circle cx="16" cy="13" r="4" fill="var(--mark)" stroke="currentColor" strokeWidth="1.5" /></svg>
+        <span className="hidden whitespace-nowrap font-display text-lg font-bold sm:inline lg:text-xl">
+          {countryName ? <>What's going on with <span className="rounded-full bg-mark px-2.5 py-0.5">{countryName}</span> ?</> : APP_NAME}
+        </span>
       </button>
 
       <div className="relative ml-auto w-full max-w-md" role="search">
