@@ -1,25 +1,18 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
-import { Maximize2, Minimize2, X, MessageSquareText, MessageCircle, MapPin, Flame, Clock, ShieldCheck, Swords } from "lucide-react";
-import { COUNTRY_INDEX, EMOJI, ago, goingOnIn, type Story, type Country } from "@/lib/data";
-import { useNav, useUser, scoreOf, reviewsOf, trustOf, commentsOf } from "@/lib/store";
-import CommentSection from "./Comments";
-import { Vote, TrustBadge, Flag, TagChip } from "./bits";
+import { Check, ChevronDown, Clock, Maximize2, Minimize2, X } from "lucide-react";
+import { COUNTRY_INDEX, ago, goingOnIn, type Story, type Country } from "@/lib/data";
+import { useNav } from "@/lib/store";
+import { Flag, ScopeTag } from "./bits";
 
-type Sort = "top" | "new" | "trusted" | "debated";
 type When = "all" | 24 | 72 | 168;
+type Scope = "all" | "local" | "international";
 const WHEN: { id: When; label: string }[] = [
   { id: "all", label: "Any time" },
   { id: 24, label: "Within 24 hours" },
   { id: 72, label: "Within 3 days" },
   { id: 168, label: "Within a week" },
-];
-const SORTS: { id: Sort; label: string; Icon: typeof Flame }[] = [
-  { id: "top", label: "Top", Icon: Flame },
-  { id: "new", label: "Newest", Icon: Clock },
-  { id: "trusted", label: "Most trusted", Icon: ShieldCheck },
-  { id: "debated", label: "Debated", Icon: Swords },
 ];
 
 export default function CountryPanel() {
@@ -57,9 +50,6 @@ export default function CountryPanel() {
 }
 
 function Header({ c, full, titleRef, onFull, onClose }: { c: Country; full: boolean; titleRef: React.RefObject<HTMLHeadingElement | null>; onFull: () => void; onClose: () => void }) {
-  const mine = useUser((s) => s.myReviews);
-  const all = c.stories.flatMap((s) => reviewsOf(s, mine));
-  const t = trustOf(all);
   return (
     <motion.header layout="position" className={full ? "mx-auto w-full max-w-6xl px-5 pt-6 pb-4 md:px-8 md:pt-8" : "px-5 pt-4 pb-3"}>
       {!full && <div className="absolute left-1/2 top-2 h-1.5 w-11 -translate-x-1/2 rounded-full bg-line md:hidden" aria-hidden="true" />}
@@ -92,200 +82,196 @@ function Header({ c, full, titleRef, onFull, onClose }: { c: Country; full: bool
       </motion.h2>
       <p className="mt-1.5 text-sm text-muted">
         {c.stories.length} stories in {c.places.length} cities
-        {t && <> and <span className={t.pct >= 60 ? "text-[var(--trust)] font-medium" : "text-[var(--warn)] font-medium"}>{t.pct}% community trust</span></>}
       </p>
     </motion.header>
   );
 }
 
-function useSorted(c: Country, sort: Sort, cat: string | null, when: When) {
-  const votes = useUser((s) => s.votes);
-  const mine = useUser((s) => s.myReviews);
+const isLocal = (s: Story) => !!s.place;
+
+function useSorted(c: Country, cat: string | null, when: When, scope: Scope) {
   return useMemo(() => {
-    const list = c.stories.filter((s) => (!cat || s.category === cat) && (when === "all" || s.hoursAgo <= when));
-    const trust = (s: Story) => trustOf(reviewsOf(s, mine))?.pct ?? -1;
-    const spread = (s: Story) => {
-      const r = reviewsOf(s, mine);
-      if (r.length < 2) return -1;
-      const good = r.filter((x) => x.rating >= 4).length;
-      return r.length - Math.abs(good - (r.length - good)) * 2;
-    };
-    const by: Record<Sort, (a: Story, b: Story) => number> = {
-      top: (a, b) => scoreOf(b, votes) - scoreOf(a, votes),
-      new: (a, b) => a.hoursAgo - b.hoursAgo,
-      trusted: (a, b) => trust(b) - trust(a),
-      debated: (a, b) => spread(b) - spread(a),
-    };
-    return [...list].sort(by[sort]);
-  }, [c, sort, cat, when, votes, mine]);
-}
-
-function SortTabs({ sort, setSort }: { sort: Sort; setSort: (s: Sort) => void }) {
-  return (
-    <div role="tablist" aria-label="Sort stories" className="no-scrollbar flex gap-1 overflow-x-auto rounded-full bg-ink/[0.04] p-1">
-      {SORTS.map(({ id, label, Icon }) => (
-        <button
-          key={id}
-          role="tab"
-          aria-selected={sort === id}
-          onClick={() => setSort(id)}
-          className={`relative inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition ${sort === id ? "text-ink" : "text-muted hover:text-ink"}`}
-        >
-          {sort === id && <motion.span layoutId="sort-pill" className="absolute inset-0 rounded-full bg-surface shadow-[var(--shadow-sm)]" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
-          <Icon className="relative size-4" aria-hidden="true" />
-          <span className="relative">{label}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Places({ c, big }: { c: Country; big?: boolean }) {
-  const go = useNav((s) => s.go);
-  const seen = useUser((s) => s.seen);
-  return (
-    <div className="no-scrollbar flex gap-4 overflow-x-auto py-1" aria-label="Local stories by city">
-      {c.places.map((p) => (
-        <button key={p.id} onClick={() => { useUser.getState().markSeen(p.id); go({ place: p.id, story: p.stories[0]?.id, tab: undefined }); }} className="group flex shrink-0 flex-col items-center gap-1.5" aria-label={`${p.name}: read the local news`}>
-          <span
-            className={`grid place-items-center rounded-full p-[3px] transition group-hover:scale-105 ${big ? "size-[76px]" : "size-[60px]"}`}
-            style={{ background: seen.includes(p.id) ? "var(--line-strong)" : "conic-gradient(from 210deg, var(--mark), #ff8a3d, #ff3d7f, var(--cobalt), var(--mark))" }}
-          >
-            <span className={`grid h-full w-full place-items-center rounded-full border-[3px] border-surface bg-surface ${big ? "text-3xl" : "text-2xl"}`} aria-hidden="true">
-              {EMOJI[p.stories[0].category] ?? "📰"}
-            </span>
-          </span>
-          <span className="text-xs font-semibold">{p.name}</span>
-        </button>
-      ))}
-    </div>
-  );
+    const list = c.stories.filter((s) => {
+      if (cat && s.category !== cat) return false;
+      if (when !== "all" && s.hoursAgo > when) return false;
+      if (scope === "local" && !isLocal(s)) return false;
+      if (scope === "international" && isLocal(s)) return false;
+      return true;
+    });
+    return [...list].sort((a, b) => a.hoursAgo - b.hoursAgo);
+  }, [c, cat, when, scope]);
 }
 
 function StoryRow({ s, i }: { s: Story; i: number }) {
   const go = useNav((st) => st.go);
-  const mine = useUser((st) => st.myReviews);
-  const myC = useUser((st) => st.myComments);
   return (
     <motion.li
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i * 0.03, 0.3) } }}
-      className="grid grid-cols-[44px_1fr] gap-2 border-t border-line px-3 py-3.5"
+      className="border-t border-line px-3 py-3.5"
     >
-      <Vote story={s} />
-      <div className="min-w-0">
-        <button onClick={() => go({ story: s.id, tab: undefined })} className="block w-full rounded-lg text-left">
-          <span className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
-            <span className="font-medium text-ink">{s.category}</span>
-            <span>{s.place ?? "Nationwide"}</span>
-            <span>{ago(s.hoursAgo)}</span>
-          </span>
-          <span className="text-[17px] font-semibold leading-snug"><span className="mark">{s.headline}</span></span>
-        </button>
-        <span className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-muted">
-          <TrustBadge story={s} />
-          <button onClick={() => go({ story: s.id, tab: "comments" })} className="-my-1 inline-flex min-h-8 items-center gap-1 rounded-full px-2 hover:bg-paper hover:text-ink">
-            <MessageCircle className="size-3.5" aria-hidden="true" />{commentsOf(s, myC).length} comments
-          </button>
-          <button onClick={() => go({ story: s.id, tab: "reviews" })} className="-my-1 inline-flex min-h-8 items-center gap-1 rounded-full px-2 hover:bg-paper hover:text-ink">
-            <MessageSquareText className="size-3.5" aria-hidden="true" />{reviewsOf(s, mine).length} reviews
-          </button>
+      <button onClick={() => go({ story: s.id, tab: undefined })} className="block w-full rounded-lg text-left">
+        <span className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
+          <ScopeTag local={isLocal(s)} />
+          <span className="font-medium text-ink">{s.category}</span>
+          <span>{s.place ?? "Nationwide"}</span>
+          <span className="ml-auto">{ago(s.hoursAgo)}</span>
         </span>
-      </div>
+        <span className="text-[17px] font-semibold leading-snug"><span className="mark">{s.headline}</span></span>
+      </button>
     </motion.li>
   );
 }
 
 function DrawerBody({ c }: { c: Country }) {
-  const [sort, setSort] = useState<Sort>("top");
   const [when, setWhen] = useState<When>("all");
-  const list = useSorted(c, sort, null, when);
+  const [scope, setScope] = useState<Scope>("all");
+  const list = useSorted(c, null, when, scope);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="space-y-3 px-5 pb-3">
-        <Places c={c} />
-        <SortTabs sort={sort} setSort={setSort} />
-        <DateFilters when={when} setWhen={setWhen} />
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <ScopeSwitch scope={scope} setScope={setScope} />
+          <TimeMenu when={when} setWhen={setWhen} />
+        </div>
       </div>
       <LayoutGroup>
         <ol className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-6">
-          {list.length === 0 ? <EmptyWhen when={when} /> : list.map((s, i) => <StoryRow key={s.id} s={s} i={i} />)}
+          {list.length === 0 ? <EmptyList when={when} scope={scope} /> : list.map((s, i) => <StoryRow key={s.id} s={s} i={i} />)}
         </ol>
       </LayoutGroup>
     </div>
   );
 }
 
-/* ---------------- Full-screen country view ---------------- */
 function FullBody({ c }: { c: Country }) {
-  const [sort, setSort] = useState<Sort>("top");
   const [cat, setCat] = useState<string | null>(null);
   const [when, setWhen] = useState<When>("all");
-  const list = useSorted(c, sort, cat, when);
-  const cats = [...new Set(c.stories.map((s) => s.category))];
-  const mine = useUser((s) => s.myReviews);
-  const tagCounts = useMemo(() => {
-    const m = new Map<string, number>();
-    c.stories.forEach((s) => reviewsOf(s, mine).forEach((r) => r.tags.forEach((t) => m.set(t, (m.get(t) ?? 0) + 1))));
-    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
-  }, [c, mine]);
+  const [scope, setScope] = useState<Scope>("all");
+  const list = useSorted(c, cat, when, scope);
+  const cats = useMemo(
+    () => [...new Set(c.stories.filter((s) => scope === "all" || (scope === "local" ? isLocal(s) : !isLocal(s))).map((s) => s.category))],
+    [c, scope],
+  );
+  useEffect(() => {
+    if (cat && !cats.includes(cat)) setCat(null);
+  }, [cat, cats]);
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1, transition: { delay: 0.15 } }} className="min-h-0 flex-1 overflow-y-auto">
-      <div className="mx-auto grid max-w-6xl gap-8 px-5 pb-16 md:grid-cols-[1fr_320px] md:px-8">
+      <div className="mx-auto max-w-6xl px-5 pb-16 md:px-8">
         <section aria-label="Stories" className="min-w-0">
-          <div className="sticky top-0 z-10 -mx-5 mb-4 space-y-3 bg-paper/90 px-5 py-3 backdrop-blur md:-mx-8 md:px-8">
-            <SortTabs sort={sort} setSort={setSort} />
+          <div className="sticky top-0 z-20 -mx-5 mb-4 space-y-3 bg-paper/90 px-5 py-3 backdrop-blur md:-mx-8 md:px-8">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <ScopeSwitch scope={scope} setScope={setScope} />
+              <TimeMenu when={when} setWhen={setWhen} />
+            </div>
             <div className="no-scrollbar flex gap-2 overflow-x-auto" role="group" aria-label="Filter by topic">
               <FilterChip on={!cat} onClick={() => setCat(null)}>All topics</FilterChip>
               {cats.map((k) => <FilterChip key={k} on={cat === k} onClick={() => setCat(cat === k ? null : k)}>{k}</FilterChip>)}
             </div>
-            <DateFilters when={when} setWhen={setWhen} />
           </div>
           <LayoutGroup>
             <ol className="grid gap-4 sm:grid-cols-2">
               <AnimatePresence mode="popLayout">
                 {list.length === 0
-                  ? <EmptyWhen when={when} />
-                  : list.map((s, i) => <StoryCard key={s.id} s={s} i={i} lead={i === 0 && sort === "top" && !cat && when === "all"} />)}
+                  ? <EmptyList when={when} scope={scope} />
+                  : list.map((s, i) => <StoryCard key={s.id} s={s} i={i} lead={i === 0 && !cat && when === "all" && scope === "all"} />)}
               </AnimatePresence>
             </ol>
           </LayoutGroup>
+          <p className="mt-8 text-xs text-muted">All stories here are sample placeholders for the prototype.</p>
         </section>
-
-        <aside className="space-y-6 md:pt-3" aria-label="More about this country">
-          <section className="rounded-3xl border border-line bg-surface p-5">
-            <h3 className="mb-3 flex items-center gap-2 font-display text-lg font-bold"><MapPin className="size-5 text-cobalt" aria-hidden="true" />Local stories</h3>
-            <Places c={c} big />
-          </section>
-          {tagCounts.length > 0 && (
-            <section className="rounded-3xl border border-line bg-surface p-5">
-              <h3 className="font-display text-lg font-bold">What reviewers say</h3>
-              <p className="mb-3 text-sm text-muted">Most-used quick reviews on {c.name} stories.</p>
-              <div className="flex flex-wrap gap-2">{tagCounts.map(([id, n]) => <TagChip key={id} id={id} count={n} />)}</div>
-            </section>
-          )}
-          <p className="px-1 text-xs text-muted">All stories here are sample placeholders for the prototype.</p>
-        </aside>
       </div>
     </motion.div>
   );
 }
 
-function DateFilters({ when, setWhen }: { when: When; setWhen: (w: When) => void }) {
+function ScopeSwitch({ scope, setScope }: { scope: Scope; setScope: (s: Scope) => void }) {
+  const items: { id: Scope; label: string }[] = [
+    { id: "all", label: "All" },
+    { id: "local", label: "Local" },
+    { id: "international", label: "International" },
+  ];
   return (
-    <div className="no-scrollbar flex gap-2 overflow-x-auto" role="group" aria-label="Filter by date">
-      {WHEN.map(({ id, label }) => (
-        <FilterChip key={id} on={when === id} onClick={() => setWhen(id)}>{label}</FilterChip>
+    <div role="radiogroup" aria-label="Local or international news" className="inline-flex rounded-full bg-ink/[0.04] p-1">
+      {items.map(({ id, label }) => (
+        <button
+          key={id}
+          role="radio"
+          aria-checked={scope === id}
+          onClick={() => setScope(id)}
+          className={`min-h-9 rounded-full px-3 text-sm font-semibold transition ${scope === id ? "bg-surface text-ink shadow-[var(--shadow-sm)]" : "text-muted hover:text-ink"}`}
+        >
+          {label}
+        </button>
       ))}
     </div>
   );
 }
 
-function EmptyWhen({ when }: { when: When }) {
-  const label = WHEN.find((w) => w.id === when)?.label.toLowerCase() ?? "this range";
-  return <li className="col-span-full px-3 py-10 text-center text-sm text-muted">No stories {label}.</li>;
+function TimeMenu({ when, setWhen }: { when: When; setWhen: (w: When) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const label = WHEN.find((w) => w.id === when)?.label ?? "Any time";
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={`inline-flex min-h-9 items-center gap-1.5 rounded-full border bg-surface px-3 text-sm font-semibold transition hover:border-line-strong ${when === "all" ? "border-line text-ink" : "border-ink text-ink"}`}
+      >
+        <Clock className="size-4 text-muted" aria-hidden="true" />
+        {label}
+        <ChevronDown className={`size-4 text-muted transition ${open ? "rotate-180" : ""}`} aria-hidden="true" />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.ul
+            role="listbox"
+            aria-label="Filter by date"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 top-[calc(100%+8px)] z-30 w-52 overflow-hidden rounded-2xl border border-line bg-surface p-1.5 shadow-[var(--shadow-lg)]"
+          >
+            {WHEN.map(({ id, label: item }) => (
+              <li key={id} role="option" aria-selected={when === id}>
+                <button
+                  type="button"
+                  onClick={() => { setWhen(id); setOpen(false); }}
+                  className={`flex min-h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-sm font-medium ${when === id ? "bg-paper text-ink" : "text-ink hover:bg-paper"}`}
+                >
+                  <Check className={`size-4 ${when === id ? "opacity-100" : "opacity-0"}`} aria-hidden="true" />
+                  {item}
+                </button>
+              </li>
+            ))}
+          </motion.ul>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function EmptyList({ when, scope }: { when: When; scope: Scope }) {
+  const time = when === "all" ? "" : ` ${WHEN.find((w) => w.id === when)?.label.toLowerCase()}`;
+  const kind = scope === "local" ? "local stories" : scope === "international" ? "international stories" : "stories";
+  return <li className="col-span-full px-3 py-10 text-center text-sm text-muted">No {kind}{time}.</li>;
 }
 
 function FilterChip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -302,11 +288,6 @@ function FilterChip({ on, onClick, children }: { on: boolean; onClick: () => voi
 
 function StoryCard({ s, i, lead }: { s: Story; i: number; lead: boolean }) {
   const go = useNav((st) => st.go);
-  const mine = useUser((st) => st.myReviews);
-  const myC = useUser((st) => st.myComments);
-  const reviews = reviewsOf(s, mine);
-  const nc = commentsOf(s, myC).length;
-  const [open, setOpen] = useState(false);
   return (
     <motion.li
       layout
@@ -315,7 +296,8 @@ function StoryCard({ s, i, lead }: { s: Story; i: number; lead: boolean }) {
       exit={{ opacity: 0, scale: 0.96 }}
       className={`group flex min-w-0 flex-col rounded-3xl border border-line bg-surface p-5 transition-shadow hover:shadow-[var(--shadow-sm)] ${lead ? "sm:col-span-2 sm:p-7" : ""}`}
     >
-      <div className="mb-3 flex items-center gap-2 text-[13px] text-muted">
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-[13px] text-muted">
+        <ScopeTag local={isLocal(s)} />
         <span className="rounded-full bg-paper px-2.5 py-1 font-medium text-ink">{s.category}</span>
         <span>{s.place ?? "Nationwide"}</span>
         <span className="ml-auto">{ago(s.hoursAgo)}</span>
@@ -326,36 +308,6 @@ function StoryCard({ s, i, lead }: { s: Story; i: number; lead: boolean }) {
         </h3>
         <p className={`mt-2 text-muted ${lead ? "text-base max-w-[60ch]" : "text-sm"}`}>{s.points[0]} {lead && s.points[1]}</p>
       </button>
-      <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-3">
-        <Vote story={s} layout="row" />
-        <TrustBadge story={s} />
-        <span className="ml-auto flex gap-1">
-          <button
-            onClick={() => setOpen((o) => !o)}
-            aria-expanded={open}
-            className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition ${open ? "bg-ink text-white" : "text-cobalt hover:bg-cobalt-soft"}`}
-          >
-            <MessageCircle className="size-4" aria-hidden="true" />{nc}<span className="sr-only"> comments</span><span aria-hidden="true" className={lead ? "" : "hidden sm:inline"}> comments</span>
-          </button>
-          <button onClick={() => go({ story: s.id, tab: "reviews" })} className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-cobalt hover:bg-cobalt-soft">
-            <MessageSquareText className="size-4" aria-hidden="true" />
-            {reviews.length ? `${reviews.length} reviews` : "Review"}
-          </button>
-        </span>
-      </div>
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 34 }}
-            className="-mx-1 overflow-hidden px-1"
-          >
-            <div className="pt-4"><CommentSection story={s} variant="inline" /></div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.li>
   );
 }

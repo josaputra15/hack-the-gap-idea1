@@ -6,6 +6,9 @@ import { useNav, useUser } from "@/lib/store";
 import { mapRef } from "@/lib/mapRef";
 
 const LOCAL_ZOOM = 4.2; // above this zoom, flags give way to local story circles
+const CITY_RANGE_KM = 28;
+const COUNTRY_RANGE_KM = 900;
+const RANGE_SOURCE = "pw-range";
 const STYLE_URLS = ["https://tiles.openfreemap.org/styles/positron", "https://tiles.openfreemap.org/styles/liberty"];
 
 const FALLBACK: StyleSpecification = {
@@ -17,6 +20,48 @@ const FALLBACK: StyleSpecification = {
     { id: "borders", type: "line", source: "countries", paint: { "line-color": "#c9d2e1", "line-width": 0.8 } },
   ],
 };
+
+/** A geographic circle, so the halo stays the same size on the ground as you zoom. */
+function circleRing(center: [number, number], radiusKm: number, steps = 72): [number, number][] {
+  const [lng, lat] = center;
+  const d = radiusKm / 6371;
+  const latR = (lat * Math.PI) / 180;
+  const lngR = (lng * Math.PI) / 180;
+  const coords: [number, number][] = [];
+  for (let i = 0; i <= steps; i++) {
+    const brng = (2 * Math.PI * i) / steps;
+    const lat2 = Math.asin(Math.sin(latR) * Math.cos(d) + Math.cos(latR) * Math.sin(d) * Math.cos(brng));
+    const lng2 = lngR + Math.atan2(Math.sin(brng) * Math.sin(d) * Math.cos(latR), Math.cos(d) - Math.sin(latR) * Math.sin(lat2));
+    coords.push([(lng2 * 180) / Math.PI, (lat2 * 180) / Math.PI]);
+  }
+  return coords;
+}
+
+function setRange(map: maplibregl.Map, center: [number, number] | null, radiusKm: number) {
+  const src = map.getSource(RANGE_SOURCE) as maplibregl.GeoJSONSource | undefined;
+  if (!src) return;
+  src.setData({
+    type: "FeatureCollection",
+    features: center
+      ? [{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [circleRing(center, radiusKm)] } }]
+      : [],
+  });
+}
+
+function applyRange(map: maplibregl.Map) {
+  const n = useNav.getState();
+  if (n.place) {
+    const p = PLACE_INDEX.get(n.place);
+    if (p) setRange(map, p.at, CITY_RANGE_KM);
+    return;
+  }
+  if (n.country) {
+    const c = COUNTRY_INDEX.get(n.country);
+    if (c) setRange(map, c.center, COUNTRY_RANGE_KM);
+    return;
+  }
+  setRange(map, null, 0);
+}
 
 async function pickStyle(): Promise<string | StyleSpecification> {
   for (const url of STYLE_URLS) {
@@ -97,6 +142,18 @@ export default function MapView({ onLevel }: { onLevel: (l: "world" | "local") =
               0, "rgba(255,255,255,0)", 0.3, "rgba(255,226,92,0.45)", 0.7, "rgba(255,138,61,0.55)", 1, "rgba(255,61,127,0.6)"],
           },
         });
+        if (!map.getSource(RANGE_SOURCE)) {
+          map.addSource(RANGE_SOURCE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+          map.addLayer({
+            id: "pw-range-fill", type: "fill", source: RANGE_SOURCE,
+            paint: { "fill-color": "#ffe25c", "fill-opacity": 0.5 },
+          });
+          map.addLayer({
+            id: "pw-range-line", type: "line", source: RANGE_SOURCE,
+            paint: { "line-color": "#e2a400", "line-width": 3, "line-opacity": 1 },
+          });
+        }
+        applyRange(map);
       });
 
       // markers
@@ -167,6 +224,7 @@ export default function MapView({ onLevel }: { onLevel: (l: "world" | "local") =
     flagEls.current.forEach((el, code) => el.classList.toggle("active", code === nav.country));
     const map = mapRef.current;
     if (!map) return;
+    applyRange(map);
     const mobile = innerWidth < 720;
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (nav.place) {

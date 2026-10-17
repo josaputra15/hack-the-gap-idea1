@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "What's Going On?",
-  description: "See what's going on around the world. Tap a flag for a country's news, zoom in for local stories, and review how trustworthy each story is.",
+  description: "See what's going on around the world. Tap a flag for a country's news, and zoom in for local stories.",
 };
 
 export const viewport: Viewport = {
