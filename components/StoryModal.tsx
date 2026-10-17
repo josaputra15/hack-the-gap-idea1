@@ -173,6 +173,24 @@ function SourceList({ sources }: { sources: SourceRef[] }) {
   );
 }
 
+async function copyText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.style.position = "fixed";
+    area.style.left = "-9999px";
+    document.body.appendChild(area);
+    area.select();
+    const ok = document.execCommand("copy");
+    area.remove();
+    return ok;
+  }
+}
+
 function StoryBody({ s, onOpenPulse }: { s: Story; onOpenPulse: (cite?: number) => void }) {
   const SrcIcon = SOURCE_ICON[s.source.kind];
   const sober = s.category === "Conflict" || s.category === "Crime";
@@ -180,11 +198,9 @@ function StoryBody({ s, onOpenPulse }: { s: Story; onOpenPulse: (cite?: number) 
   useEffect(() => { const id = setTimeout(() => setMarked(true), 250); return () => clearTimeout(id); }, []);
 
   const share = async () => {
-    const url = `${location.origin}/?s=${s.id}`;
-    try {
-      if (navigator.share) await navigator.share({ title: s.headline, url });
-      else { await navigator.clipboard.writeText(url); toast("Link copied"); }
-    } catch {}
+    const url = `${location.origin}/?c=${encodeURIComponent(s.country)}&s=${encodeURIComponent(s.id)}`;
+    const copied = await copyText(url);
+    toast(copied ? "Link copied" : "Could not copy the link");
   };
 
   return (
@@ -204,7 +220,7 @@ function StoryBody({ s, onOpenPulse }: { s: Story; onOpenPulse: (cite?: number) 
         : <p className="mt-3 text-sm text-muted">Original headline: <span className="text-ink">{s.original}</span></p>}
 
       <div className="my-6">
-        <button onClick={share} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 text-sm font-semibold transition hover:bg-paper">
+        <button type="button" onClick={share} aria-label="Copy link to this story" className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 text-sm font-semibold transition hover:bg-paper">
           <Share2 className="size-4" aria-hidden="true" />Share
         </button>
       </div>
