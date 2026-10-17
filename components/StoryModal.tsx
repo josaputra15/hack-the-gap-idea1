@@ -8,7 +8,7 @@ import { Flag, ScopeTag } from "./bits";
 import { useDialog } from "./useDialog";
 import { toast } from "./Toast";
 import { PulseTeaser, PulseView } from "./Pulse";
-import type { Pulse } from "@/lib/pulse";
+import { getStoryPulse, type Pulse } from "@/lib/pulse";
 import { liveStory, useLiveNews } from "./useLiveNews";
 
 const pulseCache = new Map<string, Pulse>();
@@ -19,7 +19,7 @@ export default function StoryModal() {
   const go = useNav((s) => s.go);
   useLiveNews(!!id?.startsWith("mm-"));
   const s = (id ? liveStory(id) : undefined) ?? (id ? STORY_INDEX.get(id) : undefined);
-  const pulseTab = tab === "pulse" && !s?.real;
+  const pulseTab = tab === "pulse";
   const close = () => go({ story: null, tab: undefined });
   const ref = useDialog<HTMLDivElement>(!!s, close);
   const [jumpTo, setJumpTo] = useState<number | null>(null);
@@ -30,17 +30,22 @@ export default function StoryModal() {
   useEffect(() => { if (s && !pulseTab) ref.current?.querySelector<HTMLElement>("#story-title")?.focus({ preventScroll: true }); }, [s, ref, pulseTab]);
 
   useEffect(() => {
-    if (!id || !pulseTab) return;
+    if (!id || !pulseTab || !s) return;
     const hit = pulseCache.get(id);
     if (hit) { setBox({ id, pulse: hit }); setError(false); return; }
     let cancel = false;
     setError(false);
+    const apply = (p: Pulse) => { pulseCache.set(id, p); if (!cancel) setBox({ id, pulse: p }); };
+    if (!STORY_INDEX.has(id)) {
+      const timer = window.setTimeout(() => apply(getStoryPulse(s)), 900);
+      return () => { cancel = true; window.clearTimeout(timer); };
+    }
     fetch(`/api/pulse?story=${encodeURIComponent(id)}`)
       .then(async (r) => { if (!r.ok) throw new Error(); return r.json() as Promise<Pulse>; })
-      .then((p) => { pulseCache.set(id, p); if (!cancel) setBox({ id, pulse: p }); })
+      .then(apply)
       .catch(() => { if (!cancel) setError(true); });
     return () => { cancel = true; };
-  }, [id, pulseTab, attempt]);
+  }, [id, pulseTab, attempt, s]);
 
   const pulse = id && box?.id === id ? box.pulse : (id ? pulseCache.get(id) ?? null : null);
   const loading = pulseTab && !!id && !error && !pulse;
@@ -71,7 +76,7 @@ export default function StoryModal() {
             transition={{ type: "spring", stiffness: 320, damping: 32 }}
             className="relative flex max-h-[94dvh] w-full max-w-[760px] flex-col overflow-hidden rounded-t-[28px] bg-surface shadow-[var(--shadow-lg)] md:max-h-[90dvh] md:rounded-[28px]"
           >
-            <Head s={s} pulse={pulseTab} onClose={close} onTab={(next) => { if (s.real && next === "pulse") return; if (next !== "pulse") setJumpTo(null); go({ tab: next === "story" ? undefined : next }); }} />
+            <Head s={s} pulse={pulseTab} onClose={close} onTab={(next) => { if (next !== "pulse") setJumpTo(null); go({ tab: next === "story" ? undefined : next }); }} />
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-10 pt-2 md:px-9">
               {pulseTab ? (
                 <div id="panel-pulse" role="tabpanel" aria-labelledby="tab-pulse" className="mt-4">
@@ -118,7 +123,7 @@ function Head({ s, pulse, onClose, onTab }: { s: Story; pulse: boolean; onClose:
       </div>
       <div role="tablist" aria-label="Story sections" className="mt-3 flex gap-1">
         <button type="button" role="tab" id="tab-story" aria-selected={!pulse} aria-controls="panel-story" onClick={() => onTab("story")} className={`inline-flex min-h-11 items-center rounded-full px-4 text-sm font-semibold ${pulse ? "text-muted hover:bg-paper" : "bg-ink text-white"}`}>The story</button>
-        {!s.real && <button type="button" role="tab" id="tab-pulse" aria-selected={pulse} aria-controls="panel-pulse" onClick={() => onTab("pulse")} className={`inline-flex min-h-11 items-center rounded-full px-4 text-sm font-semibold ${pulse ? "bg-ink text-white" : "text-muted hover:bg-paper"}`}>What people say</button>}
+        <button type="button" role="tab" id="tab-pulse" aria-selected={pulse} aria-controls="panel-pulse" onClick={() => onTab("pulse")} className={`inline-flex min-h-11 items-center rounded-full px-4 text-sm font-semibold ${pulse ? "bg-ink text-white" : "text-muted hover:bg-paper"}`}>What people say</button>
       </div>
     </div>
   );
@@ -214,7 +219,7 @@ function StoryBody({ s, onOpenPulse }: { s: Story; onOpenPulse: (cite?: number) 
         <section className={`mt-4 rounded-2xl border-l-4 p-5 ${sober ? "border-line-strong bg-[#eef1f6]" : "border-mark bg-[#fffbe8]"}`} aria-labelledby="why-h">
           <h3 id="why-h" className="mb-1 font-display text-lg font-bold">Why it matters</h3>
           <p className="text-[17px] leading-relaxed">{s.why}</p>
-          {!s.real && <PulseTeaser story={s} onOpen={onOpenPulse} />}
+          <PulseTeaser story={s} onOpen={onOpenPulse} />
         </section>
       )}
       {s.body && (

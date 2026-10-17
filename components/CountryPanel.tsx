@@ -205,10 +205,8 @@ function FullBody({ country, stories, newIds }: { country: Country; stories: Sto
   const [cat, setCat] = useState<string | null>(null);
   const [when, setWhen] = useState<When>("all");
   const [scope, setScope] = useState<Scope>("all");
-  const [outlet, setOutlet] = useState<Scope>("all");
   const [about, setAbout] = useState(false);
-  const sourced = stories.some((s) => s.scope);
-  const list = useSorted(stories, cat, when, scope, outlet, newIds);
+  const list = useSorted(stories, cat, when, scope, "all", newIds);
   const cats = useMemo(
     () => [...new Set(stories.filter((s) => scope === "all" || (scope === "local" ? isLocal(s) : !isLocal(s))).map((s) => s.category))],
     [stories, scope],
@@ -229,28 +227,19 @@ function FullBody({ country, stories, newIds }: { country: Country; stories: Sto
               </div>
               <TimeMenu when={when} setWhen={setWhen} />
             </div>
-            {!about && <div className="no-scrollbar flex gap-2 overflow-x-auto">
-              {sourced && (
-                <div role="group" aria-label="Filter by outlet" className="flex shrink-0 gap-2">
-                  {(["all", "local", "international"] as const).map((id) => (
-                    <FilterChip key={id} on={outlet === id} onClick={() => setOutlet(id)}>
-                      {id === "all" ? "All" : id === "local" ? "Local" : "International"}
-                    </FilterChip>
-                  ))}
-                </div>
-              )}
-              <div role="group" aria-label="Filter by topic" className="flex gap-2">
+            {!about && (
+              <div role="group" aria-label="Filter by topic" className="flex flex-wrap gap-2">
                 <FilterChip on={!cat} onClick={() => setCat(null)}>All topics</FilterChip>
                 {cats.map((k) => <FilterChip key={k} on={cat === k} onClick={() => setCat(cat === k ? null : k)}>{k}</FilterChip>)}
               </div>
-            </div>}
+            )}
           </div>
           {about ? <AboutBody country={country} /> : <LayoutGroup>
             <ol className="grid gap-4 sm:grid-cols-2">
               <AnimatePresence mode="popLayout">
                 {list.length === 0
                   ? <EmptyList when={when} scope={scope} />
-                  : list.map((s, i) => <StoryCard key={s.id} s={s} i={i} fresh={newIds.includes(s.id)} lead={i === 0 && !cat && when === "all" && scope === "all" && outlet === "all"} />)}
+                  : list.map((s, i) => <StoryCard key={s.id} s={s} i={i} fresh={newIds.includes(s.id)} lead={i === 0 && !cat && when === "all" && scope === "all"} />)}
               </AnimatePresence>
             </ol>
           </LayoutGroup>}

@@ -120,21 +120,29 @@ function keepRecent(items: Item[]) {
 }
 
 function headlineOnly(item: Item): Story {
-  return realStory({
+  const points = [
+    `${item.outlet} published this story.`,
+    "The lines below are sample text for the demo, not the full article.",
+  ];
+  const why = "Open the original link to read what the outlet reported.";
+  const story = realStory({
     id: `mm-h-${item.url.length.toString(36)}-${Math.abs(hash(item.url)).toString(36)}`,
     category: "News",
     headline: item.title,
     original: item.title,
-    points: [],
-    why: "",
+    points,
+    why,
     sources: [{ outlet: item.outlet, url: item.url, scope: item.scope, kind: item.kind, publishedAt: item.publishedAt }],
     scope: item.scope,
     country: "mm",
     place: null,
     placeId: null,
     at: MYANMAR.center,
-    headlineOnly: true,
   });
+  story.body =
+    `${points[0]} ${points[1]} This is placeholder text for the prototype. When the app is connected to a real news ` +
+    `service, this space will hold a longer, easy-to-read summary of the original article, written in plain English with short sentences.`;
+  return story;
 }
 
 function hash(str: string) {
