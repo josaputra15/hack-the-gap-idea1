@@ -26,8 +26,8 @@ function loadShapes() {
 }
 const STYLE_URLS = ["https://tiles.openfreemap.org/styles/positron", "https://tiles.openfreemap.org/styles/liberty"];
 
-const LAND = "#d4e2d2";
-const SEA = "#c9dcf0";
+const LAND = "#d5e8c4";
+const SEA = "#8eb8dc";
 
 const FALLBACK: StyleSpecification = {
   version: 8,
@@ -35,7 +35,7 @@ const FALLBACK: StyleSpecification = {
   layers: [
     { id: "bg", type: "background", paint: { "background-color": SEA } },
     { id: "land", type: "fill", source: "countries", paint: { "fill-color": LAND } },
-    { id: "borders", type: "line", source: "countries", paint: { "line-color": "#c5d0c4", "line-width": 0.8 } },
+    { id: "borders", type: "line", source: "countries", paint: { "line-color": "#b7c9a4", "line-width": 0.8 } },
   ],
 };
 
@@ -47,10 +47,10 @@ function tintEarth(map: maplibregl.Map) {
   };
   set("background", "background-color", LAND);
   set("water", "fill-color", SEA);
-  set("waterway", "line-color", "#b7cce6");
-  set("park", "fill-color", "#c5d6c2");
-  set("landcover_wood", "fill-color", "#c2d3be");
-  set("landuse_residential", "fill-color", "#d0dccf");
+  set("waterway", "line-color", "#6fa6d4");
+  set("park", "fill-color", "#b7d49a");
+  set("landcover_wood", "fill-color", "#a9c98a");
+  set("landuse_residential", "fill-color", "#c9deb4");
 }
 
 /** A geographic circle, so the halo stays the same size on the ground as you zoom. */
@@ -142,9 +142,9 @@ export default function MapView({ onLevel }: { onLevel: (l: "world" | "local") =
         tintEarth(map);
         try {
           map.setSky({
-            "sky-color": "#eaf2fc", "horizon-color": "#ffffff", "fog-color": "#f5f7fb",
-            "sky-horizon-blend": 0.5, "horizon-fog-blend": 0.6, "fog-ground-blend": 0.5,
-            "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0],
+            "sky-color": "#d7e7f6", "horizon-color": "#f7f8f4", "fog-color": "#e7f0e4",
+            "sky-horizon-blend": 0.4, "horizon-fog-blend": 0.4, "fog-ground-blend": 0.25,
+            "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 0.35, 5, 0.2, 7, 0],
           });
         } catch {}
         const st = map.getStyle();
