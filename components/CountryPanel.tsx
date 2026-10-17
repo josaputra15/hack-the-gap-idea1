@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
 import { Check, ChevronDown, Clock, Maximize2, Minimize2, X } from "lucide-react";
 import { COUNTRY_INDEX, ago, goingOnIn, type Story, type Country } from "@/lib/data";
+import { countryAbout } from "@/lib/about";
 import { useNav } from "@/lib/store";
 import { Flag, ScopeTag } from "./bits";
 import { useLiveNews } from "./useLiveNews";
@@ -45,7 +46,7 @@ export default function CountryPanel() {
           style={{ borderRadius: full ? 0 : undefined }}
         >
           <Header c={c} full={full} titleRef={titleRef} count={stories.length} onFull={() => go({ full: !full })} onClose={() => go({ country: null, full: false, story: null, place: null })} />
-          {full ? <FullBody stories={stories} newIds={live.newIds} /> : <DrawerBody stories={stories} newIds={live.newIds} />}
+          {full ? <FullBody country={c} stories={stories} newIds={live.newIds} /> : <DrawerBody country={c} stories={stories} newIds={live.newIds} />}
         </motion.aside>
       )}
     </AnimatePresence>
@@ -169,32 +170,43 @@ function StoryRow({ s, i, fresh }: { s: Story; i: number; fresh?: boolean }) {
   );
 }
 
-function DrawerBody({ stories, newIds }: { stories: Story[]; newIds: string[] }) {
+function DrawerBody({ country, stories, newIds }: { country: Country; stories: Story[]; newIds: string[] }) {
   const [when, setWhen] = useState<When>("all");
   const [scope, setScope] = useState<Scope>("all");
+  const [about, setAbout] = useState(false);
   const list = useSorted(stories, null, when, scope, "all", newIds);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="space-y-3 px-5 pb-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <ScopeSwitch scope={scope} setScope={setScope} />
+          <div className="flex flex-wrap items-center gap-2">
+            <ScopeSwitch scope={scope} setScope={(id) => { setAbout(false); setScope(id); }} />
+            <AboutButton name={country.name} open={about} onClick={() => setAbout((v) => !v)} />
+          </div>
           <TimeMenu when={when} setWhen={setWhen} />
         </div>
       </div>
-      <LayoutGroup>
-        <ol className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-6">
-          {list.length === 0 ? <EmptyList when={when} scope={scope} /> : list.map((s, i) => <StoryRow key={s.id} s={s} i={i} fresh={newIds.includes(s.id)} />)}
-        </ol>
-      </LayoutGroup>
+      {about ? (
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-6">
+          <AboutBody country={country} />
+        </div>
+      ) : (
+        <LayoutGroup>
+          <ol className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-6">
+            {list.length === 0 ? <EmptyList when={when} scope={scope} /> : list.map((s, i) => <StoryRow key={s.id} s={s} i={i} fresh={newIds.includes(s.id)} />)}
+          </ol>
+        </LayoutGroup>
+      )}
     </div>
   );
 }
 
-function FullBody({ stories, newIds }: { stories: Story[]; newIds: string[] }) {
+function FullBody({ country, stories, newIds }: { country: Country; stories: Story[]; newIds: string[] }) {
   const [cat, setCat] = useState<string | null>(null);
   const [when, setWhen] = useState<When>("all");
   const [scope, setScope] = useState<Scope>("all");
   const [outlet, setOutlet] = useState<Scope>("all");
+  const [about, setAbout] = useState(false);
   const sourced = stories.some((s) => s.scope);
   const list = useSorted(stories, cat, when, scope, outlet, newIds);
   const cats = useMemo(
@@ -211,10 +223,13 @@ function FullBody({ stories, newIds }: { stories: Story[]; newIds: string[] }) {
         <section aria-label="Stories" className="min-w-0">
           <div className="sticky top-0 z-20 -mx-5 mb-4 space-y-3 bg-paper/90 px-5 py-3 backdrop-blur md:-mx-8 md:px-8">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <ScopeSwitch scope={scope} setScope={setScope} />
+              <div className="flex flex-wrap items-center gap-2">
+                <ScopeSwitch scope={scope} setScope={(id) => { setAbout(false); setScope(id); }} />
+                <AboutButton name={country.name} open={about} onClick={() => setAbout((v) => !v)} />
+              </div>
               <TimeMenu when={when} setWhen={setWhen} />
             </div>
-            <div className="no-scrollbar flex gap-2 overflow-x-auto">
+            {!about && <div className="no-scrollbar flex gap-2 overflow-x-auto">
               {sourced && (
                 <div role="group" aria-label="Filter by outlet" className="flex shrink-0 gap-2">
                   {(["all", "local", "international"] as const).map((id) => (
@@ -228,9 +243,9 @@ function FullBody({ stories, newIds }: { stories: Story[]; newIds: string[] }) {
                 <FilterChip on={!cat} onClick={() => setCat(null)}>All topics</FilterChip>
                 {cats.map((k) => <FilterChip key={k} on={cat === k} onClick={() => setCat(cat === k ? null : k)}>{k}</FilterChip>)}
               </div>
-            </div>
+            </div>}
           </div>
-          <LayoutGroup>
+          {about ? <AboutBody country={country} /> : <LayoutGroup>
             <ol className="grid gap-4 sm:grid-cols-2">
               <AnimatePresence mode="popLayout">
                 {list.length === 0
@@ -238,11 +253,51 @@ function FullBody({ stories, newIds }: { stories: Story[]; newIds: string[] }) {
                   : list.map((s, i) => <StoryCard key={s.id} s={s} i={i} fresh={newIds.includes(s.id)} lead={i === 0 && !cat && when === "all" && scope === "all" && outlet === "all"} />)}
               </AnimatePresence>
             </ol>
-          </LayoutGroup>
-          {!stories.some((s) => s.real) && <p className="mt-8 text-xs text-muted">All stories here are sample placeholders for the prototype.</p>}
+          </LayoutGroup>}
+          {!about && !stories.some((s) => s.real) && <p className="mt-8 text-xs text-muted">All stories here are sample placeholders for the prototype.</p>}
         </section>
       </div>
     </motion.div>
+  );
+}
+
+function aboutTitle(name: string) {
+  const place = name.startsWith("United ") ? `the ${name}` : name;
+  return `About ${place}`;
+}
+
+function AboutButton({ name, open, onClick }: { name: string; open: boolean; onClick: () => void }) {
+  const label = aboutTitle(name);
+  return (
+    <button
+      type="button"
+      aria-pressed={open}
+      onClick={onClick}
+      className={`inline-flex min-h-11 items-center rounded-full px-4 text-sm font-semibold transition ${open ? "bg-ink text-white" : "border border-line bg-surface text-ink hover:border-line-strong"}`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function AboutBody({ country }: { country: Country }) {
+  const about = countryAbout(country.code);
+  if (!about) return <p className="text-sm text-muted">No introduction for this country yet.</p>;
+  const blocks = [
+    { title: "Snapshot", text: about.snapshot },
+    { title: "Culture", text: about.culture },
+    { title: "Fun fact", text: about.fact },
+  ];
+  return (
+    <section aria-label={aboutTitle(country.name)} className="max-w-2xl space-y-4 py-2">
+      <h3 className="font-display text-2xl font-bold">{aboutTitle(country.name)}</h3>
+      {blocks.map((block) => (
+        <div key={block.title} className="rounded-3xl border border-line bg-surface p-5">
+          <h4 className="font-display text-lg font-bold">{block.title}</h4>
+          <p className="mt-1 text-[17px] leading-relaxed">{block.text}</p>
+        </div>
+      ))}
+    </section>
   );
 }
 

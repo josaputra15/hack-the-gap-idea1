@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "motion/react";
-import { Check, ExternalLink, Film, Heart, Image as ImageIcon, MessageCircle, Sparkles } from "lucide-react";
+import { Check, ExternalLink, Film, Heart, Image as ImageIcon, MessageCircle } from "lucide-react";
 import type { Story } from "@/lib/data";
 import { getStoryPulse, type Pulse, type PulseSource } from "@/lib/pulse";
 
@@ -146,10 +146,7 @@ function Snapshot({
     <div>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="flex items-center gap-2 font-display text-2xl font-bold">
-            <Sparkles className="size-5 text-cobalt" aria-hidden="true" />
-            What people say
-          </h3>
+          <h3 className="font-display text-2xl font-bold">What people say</h3>
           <p className="mt-1 text-sm text-muted">
             Snapshot from {pulse.postsAnalyzed.toLocaleString()} public posts, {pulse.window}. Updated {pulse.updated}.
           </p>
@@ -157,18 +154,20 @@ function Snapshot({
         <span className="shrink-0 rounded-full bg-mark px-2.5 py-1 text-xs font-semibold text-ink">Demo data</span>
       </div>
 
-      <p className="mt-5 text-[19px] leading-relaxed">
+      <div className="mt-5 space-y-3 text-[19px] leading-relaxed">
         {pulse.sentences.map((sentence, i) => (
-          <span key={i}>
-            {i > 0 ? " " : null}
+          <p key={i}>
             {i === 0 ? <span className={`mark ${marked ? "on" : ""}`}>{sentence.text}</span> : sentence.text}
-            {sentence.cites.map((n) => {
-              const source = byN.get(n);
-              return source ? <CiteChip key={n} source={source} onJump={onJump} /> : null;
-            })}
-          </span>
+            {" "}
+            <span className="whitespace-nowrap">
+              {[...sentence.cites].sort((a, b) => a - b).map((n) => {
+                const source = byN.get(n);
+                return source ? <CiteChip key={n} source={source} onJump={onJump} /> : null;
+              })}
+            </span>
+          </p>
         ))}
-      </p>
+      </div>
 
       <div className="mt-6">
         <div aria-hidden="true" className="flex h-3 w-full overflow-hidden rounded-full bg-line">
@@ -194,7 +193,7 @@ function Snapshot({
         <TopicButton pressed={topic === "all"} onClick={() => onTopic("all")}>All</TopicButton>
         {pulse.topics.map((t) => (
           <TopicButton key={t.id} pressed={topic === t.id} onClick={() => onTopic(t.id)}>
-            <span aria-hidden="true">{t.emoji}</span> {t.label}
+            {t.label}
           </TopicButton>
         ))}
       </div>
@@ -295,7 +294,7 @@ function CiteChip({ source, onJump }: { source: PulseSource; onJump: (n: number)
         onClick={() => onJump(source.n)}
         onFocus={show}
         onBlur={(e) => { if (!e.currentTarget.parentElement?.contains(e.relatedTarget)) hide(); }}
-        className="mx-0.5 inline-flex size-11 items-center justify-center rounded-full"
+        className="relative mx-0.5 inline-flex size-6 items-center justify-center rounded-full align-middle before:absolute before:-inset-2.5 before:content-['']"
       >
         <span className="grid size-6 place-items-center rounded-full bg-cobalt-soft text-sm font-semibold text-cobalt">{source.n}</span>
       </button>
@@ -343,10 +342,7 @@ function LoadingCard({ query, onStatus }: { query: string; onStatus: (s: string)
 
   return (
     <div className="rounded-3xl border border-line bg-surface p-6" aria-busy="true">
-      <div className="flex items-center gap-2 font-display text-2xl font-bold">
-        <Sparkles className="size-5 text-cobalt" aria-hidden="true" />
-        What people say
-      </div>
+      <div className="font-display text-2xl font-bold">What people say</div>
       <div className={`mt-4 space-y-2 ${reduced ? "" : "animate-pulse"}`} aria-hidden="true">
         <div className="h-4 w-full rounded-full bg-line" />
         <div className="h-4 w-11/12 rounded-full bg-line" />
@@ -382,7 +378,8 @@ export function PulseTeaser({ story, onOpen }: { story: Story; onOpen: (cite?: n
     <div className="mt-4 rounded-3xl border border-line bg-surface p-4">
       <p className="text-[17px] leading-relaxed">
         {first.text}
-        {first.cites.map((n) => {
+        {" "}
+        {[...first.cites].sort((a, b) => a - b).map((n) => {
           const source = byN.get(n);
           return source ? <CiteChip key={n} source={source} onJump={(cite) => onOpen(cite)} /> : null;
         })}
