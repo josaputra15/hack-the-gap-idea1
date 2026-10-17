@@ -48,9 +48,9 @@ export function trustOf(reviews: Review[]) {
 }
 
 /* ---------- Navigation (mirrored to the URL so Back works) ---------- */
-export type StoryTab = "story" | "comments" | "reviews";
-export type Nav = { country: string | null; full: boolean; story: string | null; place: string | null; tab?: StoryTab };
-const EMPTY: Nav = { country: null, full: false, story: null, place: null, tab: undefined };
+export type StoryTab = "story" | "comments" | "reviews" | "pulse";
+export type Nav = { country: string | null; full: boolean; story: string | null; place: string | null; tab?: StoryTab; ask?: string };
+const EMPTY: Nav = { country: null, full: false, story: null, place: null, tab: undefined, ask: undefined };
 
 type NavState = Nav & {
   go: (patch: Partial<Nav>) => void;
@@ -72,6 +72,7 @@ export function navToSearch(n: Nav) {
   if (n.place) p.set("p", n.place);
   if (n.story) p.set("s", n.story);
   if (n.story && n.tab && n.tab !== "story") p.set("t", n.tab);
+  if (n.ask) p.set("ask", n.ask);
   const q = p.toString();
   return q ? `?${q}` : location.pathname;
 }
@@ -88,5 +89,6 @@ export function searchToNav(search: string): Nav {
       country = country ?? found.country;
     }
   }
-  return { country, full: p.get("view") === "full", place, story, tab: t === "comments" || t === "reviews" ? t : undefined };
+  const ask = p.get("ask") || undefined;
+  return { country, full: p.get("view") === "full", place, story, tab: t === "comments" || t === "reviews" || t === "pulse" ? t : undefined, ask };
 }

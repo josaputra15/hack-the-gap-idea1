@@ -3,12 +3,13 @@ import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
-import { Search, Plus, Minus, Globe2, LayoutGrid, X } from "lucide-react";
+import { Search, Plus, Minus, Globe2, LayoutGrid, Sparkles, X } from "lucide-react";
 import { APP_NAME, COUNTRIES, PLACE_INDEX } from "@/lib/data";
 import { useNav, useUser, navToSearch, searchToNav, type Nav } from "@/lib/store";
 import { mapRef, flyHome } from "@/lib/mapRef";
 import CountryPanel from "./CountryPanel";
 import StoryModal from "./StoryModal";
+import AskPanel from "./AskPanel";
 import Toaster from "./Toast";
 import { Flag } from "./bits";
 import { useDialog } from "./useDialog";
@@ -96,6 +97,7 @@ export default function Pinwire() {
 
       <CountryPanel />
       <StoryModal />
+      <AskPanel />
       <AllCountries open={grid} onClose={() => setGrid(false)} />
       <Toaster />
     </>
@@ -116,18 +118,27 @@ const ITEMS: Item[] = [
   ...COUNTRIES.flatMap((c) => c.places.map((p) => ({ type: "place" as const, id: p.id, label: p.name, code: c.code, sub: c.name }))),
 ];
 
+type Row = { kind: "item"; item: Item } | { kind: "ask"; text: string };
+
 function TopBar({ onGrid }: { onGrid: () => void }) {
   const go = useNav((s) => s.go);
   const reset = useNav((s) => s.reset);
   const [q, setQ] = useState("");
   const [active, setActive] = useState(0);
   const [open, setOpen] = useState(false);
-  const shown = q.trim() ? ITEMS.filter((i) => `${i.label} ${i.sub}`.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 8) : [];
+  const text = q.trim();
+  const shown = text ? ITEMS.filter((i) => `${i.label} ${i.sub}`.toLowerCase().includes(text.toLowerCase())).slice(0, 8) : [];
+  const rows: Row[] = [
+    ...shown.map((item) => ({ kind: "item" as const, item })),
+    ...(text ? [{ kind: "ask" as const, text }] : []),
+  ];
 
-  const choose = (it?: Item) => {
-    if (!it) return;
+  const choose = (row?: Row) => {
+    if (!row) return;
     setQ(""); setOpen(false);
     (document.activeElement as HTMLElement)?.blur();
+    if (row.kind === "ask") { go({ ask: row.text }); return; }
+    const it = row.item;
     if (it.type === "country") go({ country: it.id, full: false, place: null, story: null });
     else {
       const place = PLACE_INDEX.get(it.id);
@@ -157,44 +168,57 @@ function TopBar({ onGrid }: { onGrid: () => void }) {
           placeholder="Search a country or city"
           autoComplete="off"
           role="combobox"
-          aria-expanded={open && !!q}
+          aria-expanded={open && rows.length > 0}
           aria-controls="q-list"
           aria-autocomplete="list"
-          aria-activedescendant={shown[active] ? `q-${active}` : undefined}
+          aria-activedescendant={rows[active] ? `q-${active}` : undefined}
           onChange={(e) => { setQ(sanitizeSearchQuery(e.target.value)); setActive(0); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onBlur={() => setOpen(false)}
           onKeyDown={(e) => {
-            if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => (a + 1) % Math.max(shown.length, 1)); }
-            if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => (a - 1 + shown.length) % Math.max(shown.length, 1)); }
-            if (e.key === "Enter") { e.preventDefault(); choose(shown[active]); }
+            if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => (a + 1) % Math.max(rows.length, 1)); }
+            if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => (a - 1 + rows.length) % Math.max(rows.length, 1)); }
+            if (e.key === "Enter") { e.preventDefault(); choose(rows[active]); }
             if (e.key === "Escape") { setQ(""); setActive(0); setOpen(false); }
           }}
           className="h-11 w-full rounded-full border border-line bg-paper pl-11 pr-4 text-[15px] placeholder:text-muted focus:border-ink focus:bg-surface focus:outline-none"
         />
         <AnimatePresence>
-          {open && q && (
+          {open && text && (
             <motion.ul
               id="q-list"
               role="listbox"
               initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
               className="absolute inset-x-0 top-[calc(100%+8px)] max-h-80 overflow-auto rounded-3xl border border-line bg-surface p-1.5 shadow-[var(--shadow-lg)]"
             >
-              {shown.length ? shown.map((it, i) => (
+              {rows.map((row, i) => row.kind === "item" ? (
                 <li
-                  key={it.type + it.id}
+                  key={row.item.type + row.item.id}
                   id={`q-${i}`}
                   role="option"
                   aria-selected={i === active}
-                  onMouseDown={(e) => { e.preventDefault(); choose(it); }}
+                  onMouseDown={(e) => { e.preventDefault(); choose(row); }}
                   onMouseEnter={() => setActive(i)}
-                  className={`flex cursor-pointer items-center gap-3 rounded-2xl px-3 py-2.5 ${i === active ? "bg-paper" : ""}`}
+                  className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-2xl px-3 py-2.5 ${i === active ? "bg-paper" : ""}`}
                 >
-                  <Flag code={it.code} className="h-4 w-[22px] rounded-[3px]" />
-                  <span className="font-medium">{it.label}</span>
-                  <span className="ml-auto text-sm text-muted">{it.type === "place" ? it.sub : "Country"}</span>
+                  <Flag code={row.item.code} className="h-4 w-[22px] rounded-[3px]" />
+                  <span className="font-medium">{row.item.label}</span>
+                  <span className="ml-auto text-sm text-muted">{row.item.type === "place" ? row.item.sub : "Country"}</span>
                 </li>
-              )) : <li className="px-3 py-2.5 text-muted" role="option" aria-selected={false} aria-disabled>No matches. Try a country name.</li>}
+              ) : (
+                <li
+                  key="ask"
+                  id={`q-${i}`}
+                  role="option"
+                  aria-selected={i === active}
+                  onMouseDown={(e) => { e.preventDefault(); choose(row); }}
+                  onMouseEnter={() => setActive(i)}
+                  className={`flex min-h-11 cursor-pointer items-center gap-3 rounded-2xl px-3 py-2.5 ${i === active ? "bg-paper" : ""}`}
+                >
+                  <Sparkles className="size-4 shrink-0 text-cobalt" aria-hidden="true" />
+                  <span className="font-medium">Ask: “{row.text}”</span>
+                </li>
+              ))}
             </motion.ul>
           )}
         </AnimatePresence>

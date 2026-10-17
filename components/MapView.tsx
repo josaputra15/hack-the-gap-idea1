@@ -7,8 +7,23 @@ import { mapRef } from "@/lib/mapRef";
 
 const LOCAL_ZOOM = 4.2; // above this zoom, flags give way to local story circles
 const CITY_RANGE_KM = 28;
-const COUNTRY_RANGE_KM = 900;
 const RANGE_SOURCE = "pw-range";
+const COUNTRY_SOURCE = "pw-country";
+const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+/** GeoJSON names that don't match the name we show in the app. */
+const GEO_NAME: Record<string, string> = { us: "United States of America" };
+
+let countryShapes: Map<string, GeoJSON.Feature> | null = null;
+function loadShapes() {
+  if (countryShapes) return Promise.resolve(countryShapes);
+  return fetch("/countries.geojson")
+    .then((r) => r.json())
+    .then((fc: GeoJSON.FeatureCollection) => {
+      countryShapes = new Map(fc.features.map((f) => [String(f.properties?.name ?? ""), f]));
+      return countryShapes;
+    });
+}
 const STYLE_URLS = ["https://tiles.openfreemap.org/styles/positron", "https://tiles.openfreemap.org/styles/liberty"];
 
 const FALLBACK: StyleSpecification = {
@@ -37,30 +52,35 @@ function circleRing(center: [number, number], radiusKm: number, steps = 72): [nu
   return coords;
 }
 
-function setRange(map: maplibregl.Map, center: [number, number] | null, radiusKm: number) {
-  const src = map.getSource(RANGE_SOURCE) as maplibregl.GeoJSONSource | undefined;
-  if (!src) return;
-  src.setData({
-    type: "FeatureCollection",
-    features: center
-      ? [{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [circleRing(center, radiusKm)] } }]
-      : [],
-  });
+function setSource(map: maplibregl.Map, id: string, data: GeoJSON.FeatureCollection) {
+  const src = map.getSource(id) as maplibregl.GeoJSONSource | undefined;
+  src?.setData(data);
 }
 
 function applyRange(map: maplibregl.Map) {
   const n = useNav.getState();
+  if (!map.getSource(RANGE_SOURCE) || !map.getSource(COUNTRY_SOURCE)) return;
+
   if (n.place) {
     const p = PLACE_INDEX.get(n.place);
-    if (p) setRange(map, p.at, CITY_RANGE_KM);
+    setSource(map, RANGE_SOURCE, p
+      ? { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [circleRing(p.at, CITY_RANGE_KM)] } }] }
+      : EMPTY);
+    setSource(map, COUNTRY_SOURCE, EMPTY);
     return;
   }
-  if (n.country) {
-    const c = COUNTRY_INDEX.get(n.country);
-    if (c) setRange(map, c.center, COUNTRY_RANGE_KM);
+
+  setSource(map, RANGE_SOURCE, EMPTY);
+  if (!n.country) { setSource(map, COUNTRY_SOURCE, EMPTY); return; }
+
+  const c = COUNTRY_INDEX.get(n.country);
+  if (!c) { setSource(map, COUNTRY_SOURCE, EMPTY); return; }
+  if (!countryShapes) {
+    loadShapes().then(() => { if (mapRef.current === map) applyRange(map); }).catch(() => {});
     return;
   }
-  setRange(map, null, 0);
+  const feature = countryShapes.get(GEO_NAME[c.code] ?? c.name);
+  setSource(map, COUNTRY_SOURCE, feature ? { type: "FeatureCollection", features: [feature] } : EMPTY);
 }
 
 async function pickStyle(): Promise<string | StyleSpecification> {
@@ -123,37 +143,40 @@ export default function MapView({ onLevel }: { onLevel: (l: "world" | "local") =
             });
           } catch {}
         }
-        map.addSource("pw-heat", {
-          type: "geojson",
-          data: {
-            type: "FeatureCollection",
-            features: COUNTRIES.flatMap((c) => c.places.map((p) => ({
-              type: "Feature" as const, properties: { w: p.stories.length }, geometry: { type: "Point" as const, coordinates: p.at },
-            }))),
-          },
-        });
-        map.addLayer({
-          id: "pw-heat", type: "heatmap", source: "pw-heat", minzoom: 2.5, maxzoom: 12,
-          paint: {
-            "heatmap-weight": ["/", ["get", "w"], 2],
-            "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 3, 30, 9, 90],
-            "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 2.5, 0, 4, 0.6, 11, 0.3, 12, 0],
-            "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"],
-              0, "rgba(255,255,255,0)", 0.3, "rgba(255,226,92,0.45)", 0.7, "rgba(255,138,61,0.55)", 1, "rgba(255,61,127,0.6)"],
-          },
-        });
-        if (!map.getSource(RANGE_SOURCE)) {
-          map.addSource(RANGE_SOURCE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-          map.addLayer({
-            id: "pw-range-fill", type: "fill", source: RANGE_SOURCE,
-            paint: { "fill-color": "#ffe25c", "fill-opacity": 0.5 },
+        const before = map.getStyle().layers.find((l) => l.type === "symbol")?.id;
+        const add = (layer: maplibregl.LayerSpecification) => (before ? map.addLayer(layer, before) : map.addLayer(layer));
+        if (!map.getSource("pw-heat")) {
+          map.addSource("pw-heat", {
+            type: "geojson",
+            data: {
+              type: "FeatureCollection",
+              features: COUNTRIES.flatMap((c) => c.places.map((p) => ({
+                type: "Feature" as const, properties: { w: p.stories.length }, geometry: { type: "Point" as const, coordinates: p.at },
+              }))),
+            },
           });
-          map.addLayer({
-            id: "pw-range-line", type: "line", source: RANGE_SOURCE,
-            paint: { "line-color": "#e2a400", "line-width": 3, "line-opacity": 1 },
+          add({
+            id: "pw-heat", type: "heatmap", source: "pw-heat", minzoom: 2.5, maxzoom: 12,
+            paint: {
+              "heatmap-weight": ["/", ["get", "w"], 2],
+              "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 3, 30, 9, 90],
+              "heatmap-opacity": ["interpolate", ["linear"], ["zoom"], 2.5, 0, 4, 0.6, 11, 0.3, 12, 0],
+              "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"],
+                0, "rgba(255,255,255,0)", 0.3, "rgba(255,226,92,0.45)", 0.7, "rgba(255,138,61,0.55)", 1, "rgba(255,61,127,0.6)"],
+            },
           });
         }
-        applyRange(map);
+        if (!map.getSource(COUNTRY_SOURCE)) {
+          map.addSource(COUNTRY_SOURCE, { type: "geojson", data: EMPTY });
+          add({ id: "pw-country-fill", type: "fill", source: COUNTRY_SOURCE, paint: { "fill-color": "#ffe25c", "fill-opacity": 0.48 } });
+          add({ id: "pw-country-line", type: "line", source: COUNTRY_SOURCE, paint: { "line-color": "#e2a400", "line-width": 2, "line-opacity": 0.95 } });
+        }
+        if (!map.getSource(RANGE_SOURCE)) {
+          map.addSource(RANGE_SOURCE, { type: "geojson", data: EMPTY });
+          add({ id: "pw-range-fill", type: "fill", source: RANGE_SOURCE, paint: { "fill-color": "#ffe25c", "fill-opacity": 0.5 } });
+          add({ id: "pw-range-line", type: "line", source: RANGE_SOURCE, paint: { "line-color": "#e2a400", "line-width": 3, "line-opacity": 1 } });
+        }
+        loadShapes().then(() => { if (!cancelled) applyRange(map); }).catch(() => {});
       });
 
       // markers
