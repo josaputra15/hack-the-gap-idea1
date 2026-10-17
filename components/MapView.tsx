@@ -185,7 +185,7 @@ export default function MapView({ onLevel }: { onLevel: (l: "world" | "local") =
         el.className = "pw-flag";
         el.style.setProperty("--d", `${0.2 + i * 0.04}s`);
         el.setAttribute("aria-label", `${c.name}: ${c.stories.length} stories`);
-        el.innerHTML = `<span style="position:relative"><span class="b"><img src="${flagSrc(c.code)}" alt=""/></span><span class="n" aria-hidden="true">${c.stories.length}</span><span class="name" aria-hidden="true">${c.name}</span></span><span class="stem" aria-hidden="true"></span><span class="dot" aria-hidden="true"></span>`;
+        el.innerHTML = `<span style="position:relative"><span class="b"><img src="${flagSrc(c.code)}" alt=""/></span><span class="name" aria-hidden="true">${c.name}</span></span><span class="stem" aria-hidden="true"></span><span class="dot" aria-hidden="true"></span>`;
         el.addEventListener("click", (e) => { e.stopPropagation(); useNav.getState().go({ country: c.code, full: false, story: null, place: null }); });
         flagEls.current.set(c.code, el);
         new maplibregl.Marker({ element: el, anchor: "bottom", opacityWhenCovered: "0" }).setLngLat(c.center).addTo(map);
