@@ -6,10 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "scrape:mm": "node scripts/scrape-myanmar.mjs"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "fast-xml-parser": "^5.11.2",
     "geist": "1.8.1",
     "lucide-react": "0.577.0",
     "maplibre-gl": "5.24.0",

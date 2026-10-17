@@ -192,7 +192,8 @@ export default function MapView({ onLevel }: { onLevel: (l: "world" | "local") =
       });
       COUNTRIES.forEach((c) => c.places.forEach((p, i) => {
         const el = document.createElement("button");
-        el.className = "pw-local";
+        const sober = p.stories.some((s) => s.category === "Conflict" || s.category === "Crime");
+        el.className = sober ? "pw-local sober" : "pw-local";
         el.style.setProperty("--d", `${i * 0.06}s`);
         el.setAttribute("aria-label", `${p.name}: read the local news`);
         el.innerHTML = `<span class="ring" aria-hidden="true"><span class="in">${EMOJI[p.stories[0].category] ?? "📰"}</span></span><span class="lbl" aria-hidden="true">${p.name}</span>`;

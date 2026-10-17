@@ -58,5 +58,15 @@ public/                  Flags and an offline world outline map
 ## Accessibility (WCAG 2.2 AA)
 Skip link, full keyboard support, focus trapping in dialogs, a list view as a non-map alternative, screen-reader labels and live regions, pause control for auto-advancing stories, `prefers-reduced-motion` support, AA contrast, trust shown with icons and words (not only color), and 44px touch targets.
 
+## Myanmar real-news demo
+
+Myanmar (`mm`) is the one country filled with real, linked reporting. Other countries stay placeholder stories.
+
+- **Sources.** Each Myanmar story lists every outlet that covered it. The first source is the primary one. Local outlets use a blue pill. International outlets use a paper pill. A line above the list says how many local and international outlets covered it, for example "Covered by 2 international and 1 local outlet."
+- **Refresh.** The country header polls `GET /api/news/mm` on open and then every 60 seconds. The request pauses while the tab is hidden and runs again when you come back. Live mode shows "Live · updated 12s ago". If the feeds cannot be reached, the pill says "Snapshot from Oct 16".
+- **Fallback order.** Live RSS (Myanmar Now, The Irrawaddy, and Al Jazeera items that mention Myanmar) → `data/myanmar-feed.json` → the seed stories in `lib/myanmar.ts`. A feed link that matches a seed source keeps that seed's plain-English summary. Other feed links are shown as the outlet's original headline only.
+- **Scrape.** `npm run scrape:mm` fetches those three feeds plus the Burma News International listing (`https://www.bnionline.net/en/news`, because BNI's RSS feed is stale). It checks `robots.txt`, waits one second between requests, and stores only headlines, links and dates in `data/myanmar-feed.json`.
+- **`?demo=live`.** Presentation mode holds back the 3 newest real seed stories and reveals one per minute, as if they had just arrived. The published date and the source stay the real ones. Only the arrival is staged.
+
 ## Credits
 Map © OpenStreetMap contributors · OpenFreeMap · MapLibre (BSD-3) · Flags: flag-icons (MIT) · Country shapes: Natural Earth (public domain).

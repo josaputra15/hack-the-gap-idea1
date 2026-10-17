@@ -113,6 +113,7 @@ body {
 .pw-local.seen .ring { background: var(--line-strong); }
 .pw-local .in { width: 100%; height: 100%; border-radius: 99px; background: #fff; border: 3px solid #fff; display: grid; place-items: center; font-size: 24px; }
 .pw-local .lbl { font: 700 12px var(--font-sans); background: #fff; color: var(--ink); padding: 2px 9px; border-radius: 99px; box-shadow: var(--shadow-sm); white-space: nowrap; }
+.pw-local.sober .ring { background: #eef1f6; box-shadow: none; }
 .pw-local:hover .ring, .pw-local:focus-visible .ring { transform: scale(1.08); }
 .pw-local:focus-visible .ring { outline: 3px solid var(--cobalt); outline-offset: 3px; }
 
@@ -121,6 +122,8 @@ body {
 .pw-flag, .pw-local { transition: opacity .3s, scale .3s; }
 
 @keyframes pw-drop { from { opacity: 0; transform: translateY(-24px) scale(.7); } }
+@keyframes pw-new-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+.pw-new { animation: pw-new-fade 10s linear forwards; }
 @keyframes pw-pulse { 0% { transform: scale(1); opacity: .5; } 100% { transform: scale(2.6); opacity: 0; } }
 
 .no-scrollbar { scrollbar-width: none; }

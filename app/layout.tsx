@@ -4,7 +4,7 @@ import "@fontsource-variable/bricolage-grotesque";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "What's Going On?",
+  title: "What's Going On In?",
   description: "See what's going on around the world. Tap a flag for a country's news, and zoom in for local stories.",
 };
 

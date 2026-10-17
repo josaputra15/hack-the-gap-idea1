@@ -4,6 +4,7 @@
    Replace this module with a real API later; keep the exported types.
 ------------------------------------------------------------------- */
 import raw from "./raw.json";
+import { MYANMAR, type MyanmarStory } from "./myanmar";
 import { QUICK_TAGS, QUICK_COMMENTS } from "./tags";
 
 type Tuple = [string, string, string, string, string, string];
@@ -30,6 +31,14 @@ export type Review = {
   helpful: number;
   mine?: boolean;
 };
+export type SourceRef = {
+  outlet: string;
+  via?: string;
+  url: string;
+  scope: "local" | "international";
+  kind: "independent" | "wire" | "government";
+  publishedAt: string;
+};
 export type Story = {
   id: string;
   category: string;
@@ -47,6 +56,13 @@ export type Story = {
   place: string | null;
   placeId: string | null;
   at: [number, number];
+  /** True for reported articles. Placeholder countries omit this. */
+  real?: boolean;
+  scope?: "local" | "international";
+  publishedAt?: string;
+  sources?: SourceRef[];
+  /** Feed item with no plain-English rewrite. Show the outlet headline only. */
+  headlineOnly?: boolean;
 };
 export type Place = { id: string; name: string; at: [number, number]; country: string; stories: Story[] };
 export type Country = { code: string; name: string; center: [number, number]; places: Place[]; stories: Story[] };
@@ -55,6 +71,7 @@ export const EMOJI: Record<string, string> = {
   Economy: "📈", Science: "🔭", Transport: "🚆", Culture: "🎭", Weather: "🌦️", Tech: "💡",
   Environment: "🌿", Sport: "🏅", Food: "🍲", Politics: "🏛️", Health: "🩺", Energy: "⚡",
   Education: "🎓", Society: "🤝",
+  Conflict: "⚠️", Migration: "🧳", Justice: "⚖️", Crime: "🚨", News: "📰",
 };
 
 const SOURCES: { name: string; kind: Story["source"]["kind"] }[] = [
@@ -169,6 +186,88 @@ function story(t: Tuple, ctx: { code: string; place?: string; placeId?: string; 
   };
 }
 
+/** Hours between an ISO date and now. Date-only values are read as UTC midnight. */
+export function hoursSince(iso: string, now = Date.now()) {
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return 0;
+  return Math.max(0, Math.round((now - t) / 36e5));
+}
+
+export function formatPublished(iso: string) {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+}
+
+export function refreshAge<T extends { publishedAt?: string; hoursAgo: number }>(story: T, now = Date.now()): T {
+  if (!story.publishedAt) return story;
+  return { ...story, hoursAgo: hoursSince(story.publishedAt, now) };
+}
+
+/** Build one real, sourced story. Reviews and comments are sample demo data, not readers. */
+export function realStory(input: {
+  id: string;
+  category: string;
+  headline: string;
+  original: string;
+  points: string[];
+  why: string;
+  sources: SourceRef[];
+  scope: "local" | "international";
+  country: string;
+  place: string | null;
+  placeId: string | null;
+  at: [number, number];
+  headlineOnly?: boolean;
+}): Story {
+  const primary = input.sources[0];
+  const h = hash(input.id);
+  const body = input.headlineOnly
+    ? ""
+    : `${input.points.join(" ")} ${input.why} Summary written in plain English by Pinwire. Read the full article at the source.`;
+  return {
+    id: input.id,
+    category: input.category,
+    headline: input.headline,
+    original: input.original,
+    points: input.points,
+    why: input.why,
+    body,
+    source: { name: primary.outlet, url: primary.url, kind: primary.kind },
+    hoursAgo: hoursSince(primary.publishedAt),
+    score: (h % 240) + 12,
+    reviews: makeReviews(input.id, primary.kind === "government"),
+    comments: makeComments(input.id),
+    country: input.country,
+    place: input.place,
+    placeId: input.placeId,
+    at: input.at,
+    real: true,
+    scope: input.scope,
+    publishedAt: primary.publishedAt,
+    sources: input.sources,
+    headlineOnly: input.headlineOnly || undefined,
+  };
+}
+
+function fromMyanmar(item: MyanmarStory, ctx: { place: string | null; placeId: string | null; at: [number, number] }): Story {
+  return realStory({ ...item, country: MYANMAR.code, place: ctx.place, placeId: ctx.placeId, at: ctx.at });
+}
+
+function myanmarCountry(): Country {
+  const places = MYANMAR.places.map((p) => {
+    const pid = MYANMAR.code + "-" + p.name.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "-");
+    return {
+      id: pid, name: p.name, at: p.at, country: MYANMAR.code,
+      stories: p.stories.map((s) => fromMyanmar(s, { place: p.name, placeId: pid, at: p.at })),
+    };
+  });
+  const national = MYANMAR.national.map((s) => fromMyanmar(s, { place: null, placeId: null, at: MYANMAR.center }));
+  return {
+    code: MYANMAR.code, name: MYANMAR.name, center: MYANMAR.center, places,
+    stories: [...national, ...places.flatMap((p) => p.stories)],
+  };
+}
+
 export const COUNTRIES: Country[] = (raw as unknown as RawCountry[]).map((c) => {
   const places = c.places.map((p) => {
     const pid = c.code + "-" + p.name.toLowerCase().normalize("NFD").replace(/[^a-z0-9]+/g, "-");
@@ -179,14 +278,14 @@ export const COUNTRIES: Country[] = (raw as unknown as RawCountry[]).map((c) => 
   });
   const national = c.national.map((s) => story(s, { code: c.code, at: c.center }));
   return { code: c.code, name: c.name, center: c.center, places, stories: [...national, ...places.flatMap((p) => p.stories)] };
-});
+}).concat(myanmarCountry());
 
 export const STORY_INDEX = new Map(COUNTRIES.flatMap((c) => c.stories.map((s) => [s.id, s] as const)));
 export const PLACE_INDEX = new Map(COUNTRIES.flatMap((c) => c.places.map((p) => [p.id, p] as const)));
 export const COUNTRY_INDEX = new Map(COUNTRIES.map((c) => [c.code, c] as const));
 export const CATEGORIES = [...new Set(COUNTRIES.flatMap((c) => c.stories.map((s) => s.category)))].sort();
 
-export const APP_NAME = "What's Going On?";
+export const APP_NAME = "What's Going On In?";
 
 /** Country names that take "the" in English ("the United States"). */
 export function goingOnIn(name: string) {

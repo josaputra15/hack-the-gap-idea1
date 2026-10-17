@@ -1,10 +1,10 @@
 import Legal from "@/components/Legal";
-export const metadata = { title: "Accessibility — What's Going On?" };
+export const metadata = { title: "Accessibility — What's Going On In?" };
 
 export default function Accessibility() {
   return (
     <Legal title="Accessibility" updated="October 17, 2026">
-      <p>We want everyone to be able to use What's Going On?. We aim to meet the <strong>Web Content Accessibility Guidelines (WCAG) 2.2, level AA</strong>.</p>
+      <p>We want everyone to be able to use What's Going On In?. We aim to meet the <strong>Web Content Accessibility Guidelines (WCAG) 2.2, level AA</strong>.</p>
       <h2>What we do</h2>
       <ul>
         <li><strong>No map needed:</strong> &quot;All countries&quot; and search give you every story without using the map. A skip link takes you straight there.</li>

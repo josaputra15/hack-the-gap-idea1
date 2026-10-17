@@ -5,6 +5,7 @@ import { Check, ChevronDown, Clock, Maximize2, Minimize2, X } from "lucide-react
 import { COUNTRY_INDEX, ago, goingOnIn, type Story, type Country } from "@/lib/data";
 import { useNav } from "@/lib/store";
 import { Flag, ScopeTag } from "./bits";
+import { useLiveNews } from "./useLiveNews";
 
 type When = "all" | 24 | 72 | 168;
 type Scope = "all" | "local" | "international";
@@ -18,6 +19,8 @@ const WHEN: { id: When; label: string }[] = [
 export default function CountryPanel() {
   const { country: code, full, go } = useNav();
   const c = code ? COUNTRY_INDEX.get(code) : undefined;
+  const live = useLiveNews(code === "mm");
+  const stories = code === "mm" ? live.stories : (c?.stories ?? []);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => { if (c) titleRef.current?.focus({ preventScroll: true }); }, [c, full]);
@@ -41,15 +44,15 @@ export default function CountryPanel() {
           }
           style={{ borderRadius: full ? 0 : undefined }}
         >
-          <Header c={c} full={full} titleRef={titleRef} onFull={() => go({ full: !full })} onClose={() => go({ country: null, full: false, story: null, place: null })} />
-          {full ? <FullBody c={c} /> : <DrawerBody c={c} />}
+          <Header c={c} full={full} titleRef={titleRef} count={stories.length} onFull={() => go({ full: !full })} onClose={() => go({ country: null, full: false, story: null, place: null })} />
+          {full ? <FullBody stories={stories} newIds={live.newIds} /> : <DrawerBody stories={stories} newIds={live.newIds} />}
         </motion.aside>
       )}
     </AnimatePresence>
   );
 }
 
-function Header({ c, full, titleRef, onFull, onClose }: { c: Country; full: boolean; titleRef: React.RefObject<HTMLHeadingElement | null>; onFull: () => void; onClose: () => void }) {
+function Header({ c, full, titleRef, onFull, onClose, count }: { c: Country; full: boolean; titleRef: React.RefObject<HTMLHeadingElement | null>; onFull: () => void; onClose: () => void; count: number }) {
   return (
     <motion.header layout="position" className={full ? "mx-auto w-full max-w-6xl px-5 pt-6 pb-4 md:px-8 md:pt-8" : "px-5 pt-4 pb-3"}>
       {!full && <div className="absolute left-1/2 top-2 h-1.5 w-11 -translate-x-1/2 rounded-full bg-line md:hidden" aria-hidden="true" />}
@@ -80,54 +83,96 @@ function Header({ c, full, titleRef, onFull, onClose }: { c: Country; full: bool
       >
         {goingOnIn(c.name)}
       </motion.h2>
-      <p className="mt-1.5 text-sm text-muted">
-        {c.stories.length} stories in {c.places.length} cities
-      </p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <p className="text-sm text-muted">
+          {count} stories in {c.places.length} cities
+        </p>
+        {c.code === "mm" && <LivePill />}
+      </div>
     </motion.header>
+  );
+}
+
+function LivePill() {
+  const { mode, fetchedAt, newIds } = useLiveNews(true);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const secs = fetchedAt ? Math.max(0, Math.round((now - Date.parse(fetchedAt)) / 1000)) : 0;
+  const live = mode === "live" && !!fetchedAt;
+  return (
+    <>
+      <p className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line bg-surface px-3 text-sm font-semibold text-ink">
+        <span className={`size-2 rounded-full ${live ? "bg-[var(--trust)]" : "bg-[var(--muted)]"}`} aria-hidden="true" />
+        {live ? `Live · updated ${secs}s ago` : "Snapshot from Oct 16"}
+      </p>
+      <p className="sr-only" aria-live="polite">{newIds.length ? `${newIds.length} new ${newIds.length === 1 ? "story" : "stories"}` : ""}</p>
+    </>
   );
 }
 
 const isLocal = (s: Story) => !!s.place;
 
-function useSorted(c: Country, cat: string | null, when: When, scope: Scope) {
+function useSorted(stories: Story[], cat: string | null, when: When, scope: Scope, outlet: Scope, newIds: string[]) {
   return useMemo(() => {
-    const list = c.stories.filter((s) => {
+    const fresh = new Set(newIds);
+    const list = stories.filter((s) => {
       if (cat && s.category !== cat) return false;
       if (when !== "all" && s.hoursAgo > when) return false;
       if (scope === "local" && !isLocal(s)) return false;
       if (scope === "international" && isLocal(s)) return false;
+      if (outlet === "local" && s.scope !== "local") return false;
+      if (outlet === "international" && s.scope !== "international") return false;
       return true;
     });
-    return [...list].sort((a, b) => a.hoursAgo - b.hoursAgo);
-  }, [c, cat, when, scope]);
+    return [...list].sort((a, b) => {
+      const af = fresh.has(a.id) ? 0 : 1;
+      const bf = fresh.has(b.id) ? 0 : 1;
+      if (af !== bf) return af - bf;
+      return a.hoursAgo - b.hoursAgo;
+    });
+  }, [stories, cat, when, scope, outlet, newIds]);
 }
 
-function StoryRow({ s, i }: { s: Story; i: number }) {
+const soberStory = (s: Story) => s.category === "Conflict" || s.category === "Crime";
+
+function StoryMeta({ s, fresh }: { s: Story; fresh?: boolean }) {
+  return (
+    <span className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
+      <ScopeTag local={isLocal(s)} />
+      {s.real && <span className="rounded-full bg-cobalt-soft px-2 py-0.5 text-[11px] font-semibold text-cobalt">Real news</span>}
+      {fresh && <span className="pw-new rounded-full bg-mark px-2 py-0.5 text-[11px] font-semibold text-ink">New</span>}
+      <span className="font-medium text-ink">{s.category}</span>
+      {s.real && <span>{s.source.name}</span>}
+      <span>{s.place ?? "Nationwide"}</span>
+      <span className="ml-auto">{ago(s.hoursAgo)}</span>
+    </span>
+  );
+}
+
+function StoryRow({ s, i, fresh }: { s: Story; i: number; fresh?: boolean }) {
   const go = useNav((st) => st.go);
   return (
     <motion.li
       layout
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: fresh ? -16 : 10 }}
       animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i * 0.03, 0.3) } }}
-      className="border-t border-line px-3 py-3.5"
+      className={`border-t border-line px-3 py-3.5 ${soberStory(s) ? "bg-[#eef1f6]" : ""}`}
     >
       <button onClick={() => go({ story: s.id, tab: undefined })} className="block w-full rounded-lg text-left">
-        <span className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
-          <ScopeTag local={isLocal(s)} />
-          <span className="font-medium text-ink">{s.category}</span>
-          <span>{s.place ?? "Nationwide"}</span>
-          <span className="ml-auto">{ago(s.hoursAgo)}</span>
-        </span>
+        <StoryMeta s={s} fresh={fresh} />
         <span className="text-[17px] font-semibold leading-snug"><span className="mark">{s.headline}</span></span>
       </button>
     </motion.li>
   );
 }
 
-function DrawerBody({ c }: { c: Country }) {
+function DrawerBody({ stories, newIds }: { stories: Story[]; newIds: string[] }) {
   const [when, setWhen] = useState<When>("all");
   const [scope, setScope] = useState<Scope>("all");
-  const list = useSorted(c, null, when, scope);
+  const list = useSorted(stories, null, when, scope, "all", newIds);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="space-y-3 px-5 pb-3">
@@ -138,21 +183,23 @@ function DrawerBody({ c }: { c: Country }) {
       </div>
       <LayoutGroup>
         <ol className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-6">
-          {list.length === 0 ? <EmptyList when={when} scope={scope} /> : list.map((s, i) => <StoryRow key={s.id} s={s} i={i} />)}
+          {list.length === 0 ? <EmptyList when={when} scope={scope} /> : list.map((s, i) => <StoryRow key={s.id} s={s} i={i} fresh={newIds.includes(s.id)} />)}
         </ol>
       </LayoutGroup>
     </div>
   );
 }
 
-function FullBody({ c }: { c: Country }) {
+function FullBody({ stories, newIds }: { stories: Story[]; newIds: string[] }) {
   const [cat, setCat] = useState<string | null>(null);
   const [when, setWhen] = useState<When>("all");
   const [scope, setScope] = useState<Scope>("all");
-  const list = useSorted(c, cat, when, scope);
+  const [outlet, setOutlet] = useState<Scope>("all");
+  const sourced = stories.some((s) => s.scope);
+  const list = useSorted(stories, cat, when, scope, outlet, newIds);
   const cats = useMemo(
-    () => [...new Set(c.stories.filter((s) => scope === "all" || (scope === "local" ? isLocal(s) : !isLocal(s))).map((s) => s.category))],
-    [c, scope],
+    () => [...new Set(stories.filter((s) => scope === "all" || (scope === "local" ? isLocal(s) : !isLocal(s))).map((s) => s.category))],
+    [stories, scope],
   );
   useEffect(() => {
     if (cat && !cats.includes(cat)) setCat(null);
@@ -167,9 +214,20 @@ function FullBody({ c }: { c: Country }) {
               <ScopeSwitch scope={scope} setScope={setScope} />
               <TimeMenu when={when} setWhen={setWhen} />
             </div>
-            <div className="no-scrollbar flex gap-2 overflow-x-auto" role="group" aria-label="Filter by topic">
-              <FilterChip on={!cat} onClick={() => setCat(null)}>All topics</FilterChip>
-              {cats.map((k) => <FilterChip key={k} on={cat === k} onClick={() => setCat(cat === k ? null : k)}>{k}</FilterChip>)}
+            <div className="no-scrollbar flex gap-2 overflow-x-auto">
+              {sourced && (
+                <div role="group" aria-label="Filter by outlet" className="flex shrink-0 gap-2">
+                  {(["all", "local", "international"] as const).map((id) => (
+                    <FilterChip key={id} on={outlet === id} onClick={() => setOutlet(id)}>
+                      {id === "all" ? "All" : id === "local" ? "Local" : "International"}
+                    </FilterChip>
+                  ))}
+                </div>
+              )}
+              <div role="group" aria-label="Filter by topic" className="flex gap-2">
+                <FilterChip on={!cat} onClick={() => setCat(null)}>All topics</FilterChip>
+                {cats.map((k) => <FilterChip key={k} on={cat === k} onClick={() => setCat(cat === k ? null : k)}>{k}</FilterChip>)}
+              </div>
             </div>
           </div>
           <LayoutGroup>
@@ -177,11 +235,11 @@ function FullBody({ c }: { c: Country }) {
               <AnimatePresence mode="popLayout">
                 {list.length === 0
                   ? <EmptyList when={when} scope={scope} />
-                  : list.map((s, i) => <StoryCard key={s.id} s={s} i={i} lead={i === 0 && !cat && when === "all" && scope === "all"} />)}
+                  : list.map((s, i) => <StoryCard key={s.id} s={s} i={i} fresh={newIds.includes(s.id)} lead={i === 0 && !cat && when === "all" && scope === "all" && outlet === "all"} />)}
               </AnimatePresence>
             </ol>
           </LayoutGroup>
-          <p className="mt-8 text-xs text-muted">All stories here are sample placeholders for the prototype.</p>
+          {!stories.some((s) => s.real) && <p className="mt-8 text-xs text-muted">All stories here are sample placeholders for the prototype.</p>}
         </section>
       </div>
     </motion.div>
@@ -286,27 +344,24 @@ function FilterChip({ on, onClick, children }: { on: boolean; onClick: () => voi
   );
 }
 
-function StoryCard({ s, i, lead }: { s: Story; i: number; lead: boolean }) {
+function StoryCard({ s, i, lead, fresh }: { s: Story; i: number; lead: boolean; fresh?: boolean }) {
   const go = useNav((st) => st.go);
   return (
     <motion.li
       layout
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: fresh ? -20 : 16 }}
       animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i * 0.04, 0.4) } }}
       exit={{ opacity: 0, scale: 0.96 }}
-      className={`group flex min-w-0 flex-col rounded-3xl border border-line bg-surface p-5 transition-shadow hover:shadow-[var(--shadow-sm)] ${lead ? "sm:col-span-2 sm:p-7" : ""}`}
+      className={`group flex min-w-0 flex-col rounded-3xl border border-line p-5 transition-shadow hover:shadow-[var(--shadow-sm)] ${soberStory(s) ? "bg-[#eef1f6]" : "bg-surface"} ${lead ? "sm:col-span-2 sm:p-7" : ""}`}
     >
-      <div className="mb-3 flex flex-wrap items-center gap-2 text-[13px] text-muted">
-        <ScopeTag local={isLocal(s)} />
-        <span className="rounded-full bg-paper px-2.5 py-1 font-medium text-ink">{s.category}</span>
-        <span>{s.place ?? "Nationwide"}</span>
-        <span className="ml-auto">{ago(s.hoursAgo)}</span>
-      </div>
+      <StoryMeta s={s} fresh={fresh} />
       <button onClick={() => go({ story: s.id, tab: undefined })} className="flex-1 rounded-xl text-left">
         <h3 className={`font-display font-bold leading-[1.1] ${lead ? "text-3xl md:text-[40px]" : "text-[22px]"}`}>
           <span className="mark">{s.headline}</span>
         </h3>
-        <p className={`mt-2 text-muted ${lead ? "text-base max-w-[60ch]" : "text-sm"}`}>{s.points[0]} {lead && s.points[1]}</p>
+        {(s.points[0] || (lead && s.points[1])) && (
+          <p className={`mt-2 text-muted ${lead ? "max-w-[60ch] text-base" : "text-sm"}`}>{s.points[0]} {lead && s.points[1]}</p>
+        )}
       </button>
     </motion.li>
   );
