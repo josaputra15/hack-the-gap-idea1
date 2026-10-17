@@ -158,7 +158,7 @@ function story(t: Tuple, ctx: { code: string; place?: string; placeId?: string; 
       `service, this space will hold a longer, easy-to-read summary of the original article, written in plain ` +
       `English with short sentences.`,
     source: { ...src, url: "https://example.com/news/" + id },
-    hoursAgo: (h % 23) + 1,
+    hoursAgo: ageHours(h),
     score: (h % 240) + 12,
     reviews: makeReviews(id, src.kind === "government"),
     comments: makeComments(id),
@@ -195,4 +195,19 @@ export function goingOnIn(name: string) {
 }
 
 export const flagSrc = (code: string) => `/flags/${code}.svg`;
-export const ago = (h: number) => (h < 1 ? "just now" : h === 1 ? "1 hour ago" : `${h} hours ago`);
+
+/** Spread sample stories from the last day out past a week, so date filters differ. */
+function ageHours(h: number) {
+  const bucket = h % 10;
+  if (bucket < 4) return (h % 23) + 1; // within a day
+  if (bucket < 7) return 25 + (h % 47); // 1–3 days
+  if (bucket < 9) return 73 + (h % 95); // 3–7 days
+  return 192 + (h % 48); // 8–9 days, past a week
+}
+
+export function ago(h: number) {
+  if (h < 1) return "just now";
+  if (h < 24) return h === 1 ? "1 hour ago" : `${h} hours ago`;
+  const days = Math.floor(h / 24);
+  return days === 1 ? "1 day ago" : `${days} days ago`;
+}

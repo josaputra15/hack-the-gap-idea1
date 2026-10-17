@@ -8,6 +8,13 @@ import CommentSection from "./Comments";
 import { Vote, TrustBadge, Flag, TagChip } from "./bits";
 
 type Sort = "top" | "new" | "trusted" | "debated";
+type When = "all" | 24 | 72 | 168;
+const WHEN: { id: When; label: string }[] = [
+  { id: "all", label: "Any time" },
+  { id: 24, label: "Within 24 hours" },
+  { id: 72, label: "Within 3 days" },
+  { id: 168, label: "Within a week" },
+];
 const SORTS: { id: Sort; label: string; Icon: typeof Flame }[] = [
   { id: "top", label: "Top", Icon: Flame },
   { id: "new", label: "Newest", Icon: Clock },
@@ -91,11 +98,11 @@ function Header({ c, full, titleRef, onFull, onClose }: { c: Country; full: bool
   );
 }
 
-function useSorted(c: Country, sort: Sort, cat: string | null) {
+function useSorted(c: Country, sort: Sort, cat: string | null, when: When) {
   const votes = useUser((s) => s.votes);
   const mine = useUser((s) => s.myReviews);
   return useMemo(() => {
-    const list = c.stories.filter((s) => !cat || s.category === cat);
+    const list = c.stories.filter((s) => (!cat || s.category === cat) && (when === "all" || s.hoursAgo <= when));
     const trust = (s: Story) => trustOf(reviewsOf(s, mine))?.pct ?? -1;
     const spread = (s: Story) => {
       const r = reviewsOf(s, mine);
@@ -110,7 +117,7 @@ function useSorted(c: Country, sort: Sort, cat: string | null) {
       debated: (a, b) => spread(b) - spread(a),
     };
     return [...list].sort(by[sort]);
-  }, [c, sort, cat, votes, mine]);
+  }, [c, sort, cat, when, votes, mine]);
 }
 
 function SortTabs({ sort, setSort }: { sort: Sort; setSort: (s: Sort) => void }) {
@@ -192,16 +199,18 @@ function StoryRow({ s, i }: { s: Story; i: number }) {
 
 function DrawerBody({ c }: { c: Country }) {
   const [sort, setSort] = useState<Sort>("top");
-  const list = useSorted(c, sort, null);
+  const [when, setWhen] = useState<When>("all");
+  const list = useSorted(c, sort, null, when);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="space-y-3 px-5 pb-3">
         <Places c={c} />
         <SortTabs sort={sort} setSort={setSort} />
+        <DateFilters when={when} setWhen={setWhen} />
       </div>
       <LayoutGroup>
         <ol className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pb-6">
-          {list.map((s, i) => <StoryRow key={s.id} s={s} i={i} />)}
+          {list.length === 0 ? <EmptyWhen when={when} /> : list.map((s, i) => <StoryRow key={s.id} s={s} i={i} />)}
         </ol>
       </LayoutGroup>
     </div>
@@ -212,7 +221,8 @@ function DrawerBody({ c }: { c: Country }) {
 function FullBody({ c }: { c: Country }) {
   const [sort, setSort] = useState<Sort>("top");
   const [cat, setCat] = useState<string | null>(null);
-  const list = useSorted(c, sort, cat);
+  const [when, setWhen] = useState<When>("all");
+  const list = useSorted(c, sort, cat, when);
   const cats = [...new Set(c.stories.map((s) => s.category))];
   const mine = useUser((s) => s.myReviews);
   const tagCounts = useMemo(() => {
@@ -231,11 +241,14 @@ function FullBody({ c }: { c: Country }) {
               <FilterChip on={!cat} onClick={() => setCat(null)}>All topics</FilterChip>
               {cats.map((k) => <FilterChip key={k} on={cat === k} onClick={() => setCat(cat === k ? null : k)}>{k}</FilterChip>)}
             </div>
+            <DateFilters when={when} setWhen={setWhen} />
           </div>
           <LayoutGroup>
             <ol className="grid gap-4 sm:grid-cols-2">
               <AnimatePresence mode="popLayout">
-                {list.map((s, i) => <StoryCard key={s.id} s={s} i={i} lead={i === 0 && sort === "top" && !cat} />)}
+                {list.length === 0
+                  ? <EmptyWhen when={when} />
+                  : list.map((s, i) => <StoryCard key={s.id} s={s} i={i} lead={i === 0 && sort === "top" && !cat && when === "all"} />)}
               </AnimatePresence>
             </ol>
           </LayoutGroup>
@@ -258,6 +271,21 @@ function FullBody({ c }: { c: Country }) {
       </div>
     </motion.div>
   );
+}
+
+function DateFilters({ when, setWhen }: { when: When; setWhen: (w: When) => void }) {
+  return (
+    <div className="no-scrollbar flex gap-2 overflow-x-auto" role="group" aria-label="Filter by date">
+      {WHEN.map(({ id, label }) => (
+        <FilterChip key={id} on={when === id} onClick={() => setWhen(id)}>{label}</FilterChip>
+      ))}
+    </div>
+  );
+}
+
+function EmptyWhen({ when }: { when: When }) {
+  const label = WHEN.find((w) => w.id === when)?.label.toLowerCase() ?? "this range";
+  return <li className="col-span-full px-3 py-10 text-center text-sm text-muted">No stories {label}.</li>;
 }
 
 function FilterChip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
