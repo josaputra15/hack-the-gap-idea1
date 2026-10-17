@@ -104,6 +104,13 @@ export default function Pinwire() {
 
 /* ---------------- Top bar with search ---------------- */
 type Item = { type: "country" | "place"; id: string; label: string; code: string; sub: string };
+const MAX_SEARCH_QUERY_LENGTH = 100;
+const UNSAFE_SEARCH_CHARACTERS = /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g;
+
+function sanitizeSearchQuery(value: string) {
+  return value.normalize("NFKC").replace(UNSAFE_SEARCH_CHARACTERS, "").replace(/\s+/g, " ").slice(0, MAX_SEARCH_QUERY_LENGTH);
+}
+
 const ITEMS: Item[] = [
   ...COUNTRIES.map((c) => ({ type: "country" as const, id: c.code, label: c.name, code: c.code, sub: `${c.stories.length} stories` })),
   ...COUNTRIES.flatMap((c) => c.places.map((p) => ({ type: "place" as const, id: p.id, label: p.name, code: c.code, sub: c.name }))),
@@ -146,6 +153,7 @@ function TopBar({ onGrid }: { onGrid: () => void }) {
           id="q"
           type="search"
           value={q}
+          maxLength={MAX_SEARCH_QUERY_LENGTH}
           placeholder="Search a country or city"
           autoComplete="off"
           role="combobox"
@@ -153,14 +161,14 @@ function TopBar({ onGrid }: { onGrid: () => void }) {
           aria-controls="q-list"
           aria-autocomplete="list"
           aria-activedescendant={shown[active] ? `q-${active}` : undefined}
-          onChange={(e) => { setQ(e.target.value); setActive(0); setOpen(true); }}
+          onChange={(e) => { setQ(sanitizeSearchQuery(e.target.value)); setActive(0); setOpen(true); }}
           onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          onBlur={() => setOpen(false)}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => (a + 1) % Math.max(shown.length, 1)); }
             if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => (a - 1 + shown.length) % Math.max(shown.length, 1)); }
             if (e.key === "Enter") { e.preventDefault(); choose(shown[active]); }
-            if (e.key === "Escape") { setQ(""); }
+            if (e.key === "Escape") { setQ(""); setActive(0); setOpen(false); }
           }}
           className="h-11 w-full rounded-full border border-line bg-paper pl-11 pr-4 text-[15px] placeholder:text-muted focus:border-ink focus:bg-surface focus:outline-none"
         />
