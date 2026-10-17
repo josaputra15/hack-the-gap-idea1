@@ -1,4 +1,5 @@
 # What's Going On In ____?
+
 ---
 What's Going On In ___? is an interactive map-based news platform that helps people learn about any country or city through credibility-scored news, reviewed and flagged by the community from that region. Built by international students, it makes it easy to share your home country with friends and connect across cultures.
 ---
