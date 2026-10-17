@@ -1,6 +1,6 @@
 import Legal, { Callout } from "@/components/Legal";
 import ClearData from "./ClearData";
-export const metadata = { title: "Privacy Policy — Pinwire" };
+export const metadata = { title: "Privacy Policy — What's Going On?" };
 
 export default function Privacy() {
   return (
@@ -14,10 +14,10 @@ export default function Privacy() {
       </ul>
       <p>All of this stays in your browser&apos;s local storage. Nobody else can see it.</p>
       <h2>Third parties</h2><p>To draw the map, your browser loads map tiles from OpenFreeMap. Like any website request, this service can see your IP address.</p>
-      <h2>Cookies</h2><p>Pinwire does not use tracking or advertising cookies.</p>
+      <h2>Cookies</h2><p>What's Going On? does not use tracking or advertising cookies.</p>
       <h2>Deleting your data</h2><p>Clear this site&apos;s data in your browser settings, or press the button below.</p>
       <ClearData />
-      <h2>Children</h2><p>Pinwire is not meant for children under 13.</p>
+      <h2>Children</h2><p>What's Going On? is not meant for children under 13.</p>
       <h2>Future versions</h2><p>If we add accounts or a server, we will update this policy before we collect any new data.</p>
     </Legal>
   );

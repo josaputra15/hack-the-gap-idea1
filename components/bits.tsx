@@ -51,7 +51,6 @@ export function TagChip({ id, count, selected, onClick, size = "sm" }: { id: str
   const style = onClick && !selected ? "bg-surface text-ink border-line hover:border-line-strong" : TONE_STYLE[t.tone];
   const content = (
     <>
-      <span aria-hidden="true">{t.emoji}</span>
       {t.label}
       {count !== undefined && <span className="opacity-70 tabular-nums">{count}</span>}
     </>

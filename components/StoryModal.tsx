@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Share2, ExternalLink, Landmark, Newspaper, Radio, ThumbsUp, Flag as FlagIcon, ShieldCheck, ShieldAlert } from "lucide-react";
-import { STORY_INDEX, COUNTRY_INDEX, EMOJI, ago, type Story, type Review } from "@/lib/data";
-import { useNav, useUser, reviewsOf, trustOf } from "@/lib/store";
+import { X, Share2, ExternalLink, Landmark, Newspaper, Radio, ThumbsUp, Flag as FlagIcon, ShieldCheck, ShieldAlert, MessageCircle } from "lucide-react";
+import { STORY_INDEX, COUNTRY_INDEX, ago, type Story, type Review } from "@/lib/data";
+import { useNav, useUser, reviewsOf, trustOf, commentsOf, type StoryTab } from "@/lib/store";
+import CommentSection from "./Comments";
 import { QUICK_TAGS } from "@/lib/tags";
 import { Vote, TagChip, Flag } from "./bits";
 import { useDialog } from "./useDialog";
@@ -13,10 +14,15 @@ export default function StoryModal() {
   const id = useNav((s) => s.story);
   const go = useNav((s) => s.go);
   const s = id ? STORY_INDEX.get(id) : undefined;
-  const close = () => go({ story: null });
+  const close = () => go({ story: null, tab: undefined });
   const ref = useDialog<HTMLDivElement>(!!s, close);
-  const [tab, setTab] = useState<"story" | "reviews">("story");
-  useEffect(() => setTab("story"), [id]);
+  const tab: StoryTab = useNav((st) => st.tab) ?? "story";
+  const setTab = (t: StoryTab) => go({ tab: t === "story" ? undefined : t });
+  const order: StoryTab[] = ["story", "comments", "reviews"];
+  const dir = useRef(0);
+  const prevTab = useRef(tab);
+  if (prevTab.current !== tab) { dir.current = order.indexOf(tab) > order.indexOf(prevTab.current) ? 1 : -1; prevTab.current = tab; }
+  useEffect(() => { ref.current?.querySelector(".overflow-y-auto")?.scrollTo({ top: 0 }); }, [tab, ref]);
   useEffect(() => { if (s) ref.current?.querySelector<HTMLElement>("#story-title")?.focus({ preventScroll: true }); }, [s, ref]);
 
   return (
@@ -45,13 +51,15 @@ export default function StoryModal() {
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={tab}
-                  initial={{ opacity: 0, x: tab === "reviews" ? 24 : -24 }}
+                  initial={{ opacity: 0, x: dir.current * 24 }}
                   animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: tab === "reviews" ? 24 : -24 }}
+                  exit={{ opacity: 0, x: dir.current * -24 }}
                   transition={{ duration: 0.2 }}
                   className="px-6 pb-10 pt-2 md:px-9"
                 >
-                  {tab === "story" ? <StoryTab s={s} toReviews={() => setTab("reviews")} /> : <ReviewsTab s={s} />}
+                  {tab === "story" && <StoryTab s={s} toReviews={() => setTab("reviews")} toComments={() => setTab("comments")} />}
+                  {tab === "comments" && <div className="pt-6"><CommentSection story={s} /></div>}
+                  {tab === "reviews" && <ReviewsTab s={s} />}
                 </motion.div>
               </AnimatePresence>
             </div>
@@ -62,9 +70,11 @@ export default function StoryModal() {
   );
 }
 
-function Head({ s, tab, setTab, onClose }: { s: Story; tab: string; setTab: (t: "story" | "reviews") => void; onClose: () => void }) {
+function Head({ s, tab, setTab, onClose }: { s: Story; tab: StoryTab; setTab: (t: StoryTab) => void; onClose: () => void }) {
   const mine = useUser((st) => st.myReviews);
+  const myC = useUser((st) => st.myComments);
   const n = reviewsOf(s, mine).length;
+  const nc = commentsOf(s, myC).length;
   const c = COUNTRY_INDEX.get(s.country)!;
   return (
     <div className="border-b border-line px-6 pt-5 md:px-9">
@@ -77,10 +87,10 @@ function Head({ s, tab, setTab, onClose }: { s: Story; tab: string; setTab: (t: 
           <X className="size-5" aria-hidden="true" />
         </button>
       </div>
-      <div role="tablist" aria-label="Story sections" className="flex gap-6">
-        {(["story", "reviews"] as const).map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={`relative min-h-11 pb-3 text-[15px] font-semibold transition ${tab === t ? "text-ink" : "text-muted hover:text-ink"}`}>
-            {t === "story" ? "The story" : `Reviews (${n})`}
+      <div role="tablist" aria-label="Story sections" className="no-scrollbar flex gap-6 overflow-x-auto">
+        {(["story", "comments", "reviews"] as const).map((t) => (
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={`relative min-h-11 shrink-0 pb-3 text-[15px] font-semibold transition ${tab === t ? "text-ink" : "text-muted hover:text-ink"}`}>
+            {t === "story" ? "The story" : t === "comments" ? `Comments (${nc})` : `Reviews (${n})`}
             {tab === t && <motion.span layoutId="story-tab" className="absolute inset-x-0 -bottom-px h-[3px] rounded-full bg-ink" />}
           </button>
         ))}
@@ -92,8 +102,10 @@ function Head({ s, tab, setTab, onClose }: { s: Story; tab: string; setTab: (t: 
 const SOURCE_ICON = { government: Landmark, independent: Newspaper, wire: Radio };
 const SOURCE_LABEL = { government: "Government source", independent: "Independent outlet", wire: "News agency" };
 
-function StoryTab({ s, toReviews }: { s: Story; toReviews: () => void }) {
+function StoryTab({ s, toReviews, toComments }: { s: Story; toReviews: () => void; toComments: () => void }) {
   const mine = useUser((st) => st.myReviews);
+  const myC = useUser((st) => st.myComments);
+  const nc = commentsOf(s, myC).length;
   const t = trustOf(reviewsOf(s, mine));
   const SrcIcon = SOURCE_ICON[s.source.kind];
   const [marked, setMarked] = useState(false);
@@ -110,7 +122,7 @@ function StoryTab({ s, toReviews }: { s: Story; toReviews: () => void }) {
   return (
     <article>
       <div className="mt-4 flex flex-wrap gap-2 text-xs">
-        <span className="rounded-full bg-paper px-2.5 py-1 font-medium">{EMOJI[s.category]} {s.category}</span>
+        <span className="rounded-full bg-paper px-2.5 py-1 font-medium">{s.category}</span>
         <span className="rounded-full border border-dashed border-line-strong px-2.5 py-1 text-muted">Sample story, not real news</span>
       </div>
       <h2 id="story-title" tabIndex={-1} className="mt-4 font-display text-[34px] font-bold leading-[1.05] md:text-[44px]">
@@ -126,6 +138,9 @@ function StoryTab({ s, toReviews }: { s: Story; toReviews: () => void }) {
         </button>
         <button onClick={share} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 text-sm font-semibold transition hover:bg-paper">
           <Share2 className="size-4" aria-hidden="true" />Share
+        </button>
+        <button onClick={toComments} className="inline-flex min-h-11 items-center gap-2 rounded-full border border-line px-4 text-sm font-semibold transition hover:bg-paper">
+          <MessageCircle className="size-4" aria-hidden="true" />{nc} comments
         </button>
       </div>
 
@@ -152,17 +167,24 @@ function StoryTab({ s, toReviews }: { s: Story; toReviews: () => void }) {
           Read original<ExternalLink className="size-4" aria-hidden="true" /><span className="sr-only"> (opens in a new tab)</span>
         </a>
       </div>
+
+      <section className="mt-10 border-t border-line pt-8" aria-label="Comments preview">
+        <CommentSection story={s} variant="inline" />
+        <button onClick={toComments} className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-full bg-ink px-5 text-sm font-semibold text-white">
+          <MessageCircle className="size-4" aria-hidden="true" />Open the comment section
+        </button>
+      </section>
     </article>
   );
 }
 
 /* ---------------- Reviews ---------------- */
 const SCALE = [
-  { v: 1, label: "Not at all", face: "😟" },
-  { v: 2, label: "A little", face: "🤨" },
-  { v: 3, label: "Not sure", face: "😐" },
-  { v: 4, label: "Mostly", face: "🙂" },
-  { v: 5, label: "Very", face: "😃" },
+  { v: 1, label: "Not at all" },
+  { v: 2, label: "A little" },
+  { v: 3, label: "Not sure" },
+  { v: 4, label: "Mostly" },
+  { v: 5, label: "Very" },
 ];
 const GROUPS = [
   { tone: "good", title: "Builds trust" },
@@ -200,7 +222,7 @@ function ReviewsTab({ s }: { s: Story }) {
         <ul className="space-y-1.5" aria-label="How people rated it">
           {dist.map(({ v, n }) => (
             <li key={v} className="grid grid-cols-[88px_1fr_24px] items-center gap-2 text-sm">
-              <span className="text-muted">{SCALE[v - 1].face} {SCALE[v - 1].label}</span>
+              <span className="text-muted">{SCALE[v - 1].label}</span>
               <span className="h-2 overflow-hidden rounded-full bg-line">
                 <motion.span className="block h-full rounded-full bg-ink" initial={{ width: 0 }} animate={{ width: all.length ? `${(n / all.length) * 100}%` : 0 }} transition={{ type: "spring", stiffness: 120, damping: 20 }} />
               </span>
@@ -274,7 +296,7 @@ function ReviewForm({ s }: { s: Story }) {
               onClick={() => { setRating(o.v); setErr(""); }}
               className={`flex min-h-[72px] flex-col items-center justify-center gap-1 rounded-2xl border text-xs font-medium transition ${rating === o.v ? "border-ink bg-ink text-white" : "border-line hover:border-line-strong"}`}
             >
-              <span className="text-2xl" aria-hidden="true">{o.face}</span>{o.label}
+              <span className="text-base font-bold">{o.v}</span>{o.label}
             </motion.button>
           ))}
         </div>
@@ -330,7 +352,7 @@ function ReviewItem({ r }: { r: Review }) {
           {r.mine && <span className="ml-2 rounded-full bg-cobalt-soft px-2 py-0.5 text-xs font-medium text-cobalt">You</span>}
           <span className="ml-2 text-muted">{r.ago === "now" ? "just now" : `${r.ago} ago`}</span>
         </p>
-        <p className="mt-0.5 text-sm text-muted">Trust: <span className="font-medium text-ink">{SCALE[r.rating - 1].face} {SCALE[r.rating - 1].label}</span></p>
+        <p className="mt-0.5 text-sm text-muted">Trust: <span className="font-medium text-ink">{SCALE[r.rating - 1].label}</span></p>
         {r.tags.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{r.tags.map((t) => <TagChip key={t} id={t} />)}</div>}
         {r.text && <p className="mt-2 text-[15px] leading-relaxed">{r.text}</p>}
         <div className="mt-2 flex gap-1 text-sm">

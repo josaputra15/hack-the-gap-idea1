@@ -1,15 +1,14 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import { Search, Plus, Minus, Globe2, LayoutGrid, X } from "lucide-react";
-import { COUNTRIES } from "@/lib/data";
+import { APP_NAME, COUNTRIES, PLACE_INDEX } from "@/lib/data";
 import { useNav, useUser, navToSearch, searchToNav, type Nav } from "@/lib/store";
 import { mapRef, flyHome } from "@/lib/mapRef";
 import CountryPanel from "./CountryPanel";
 import StoryModal from "./StoryModal";
-import StoryViewer from "./StoryViewer";
 import Toaster from "./Toast";
 import { Flag } from "./bits";
 import { useDialog } from "./useDialog";
@@ -62,7 +61,7 @@ export default function Pinwire() {
       <a href="#all-countries" onClick={(e) => { e.preventDefault(); setGrid(true); }} className="fixed left-3 -top-20 z-[100] rounded-xl bg-ink px-4 py-2.5 font-semibold text-white focus:top-3">
         Skip to the list of countries
       </a>
-      <h1 className="sr-only">Pinwire: world news on a map, in plain English</h1>
+      <h1 className="sr-only">{APP_NAME}: world news on a map, in plain English</h1>
 
       <MapView onLevel={onLevel} />
 
@@ -84,7 +83,7 @@ export default function Pinwire() {
             className="fixed bottom-14 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-full border border-line bg-surface/95 px-4 py-2.5 text-sm font-medium shadow-[var(--shadow-sm)] backdrop-blur"
             aria-live="polite"
           >
-            {level === "world" ? "Tap a flag to read a country's news. Zoom in for local stories." : "Local stories. Tap a circle to watch."}
+            {level === "world" ? "Tap a flag to read a country's news. Zoom in for local stories." : "Local stories. Tap a circle to read the news."}
           </motion.p>
         )}
       </AnimatePresence>
@@ -96,10 +95,8 @@ export default function Pinwire() {
       </footer>
 
       <CountryPanel />
-      <StoryViewer />
       <StoryModal />
       <AllCountries open={grid} onClose={() => setGrid(false)} />
-      <Welcome />
       <Toaster />
     </>
   );
@@ -125,7 +122,11 @@ function TopBar({ onGrid }: { onGrid: () => void }) {
     setQ(""); setOpen(false);
     (document.activeElement as HTMLElement)?.blur();
     if (it.type === "country") go({ country: it.id, full: false, place: null, story: null });
-    else go({ country: it.code, place: it.id, story: null });
+    else {
+      const place = PLACE_INDEX.get(it.id);
+      useUser.getState().markSeen(it.id);
+      go({ country: it.code, place: it.id, story: place?.stories[0]?.id ?? null, tab: undefined });
+    }
   };
 
   return (
@@ -133,9 +134,9 @@ function TopBar({ onGrid }: { onGrid: () => void }) {
       initial={{ y: -30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ type: "spring", stiffness: 200, damping: 24, delay: 0.1 }}
       className="fixed inset-x-3 top-3 z-20 flex items-center gap-2 rounded-full border border-line bg-surface/90 py-1.5 pl-4 pr-1.5 shadow-[var(--shadow-sm)] backdrop-blur-md md:inset-x-4 md:top-4"
     >
-      <button onClick={() => { reset(); flyHome(); }} className="flex items-center gap-2 rounded-full pr-2" aria-label="Pinwire home">
+      <button onClick={() => { reset(); flyHome(); }} className="flex shrink-0 items-center gap-2 rounded-full pr-2" aria-label={`${APP_NAME} home`}>
         <svg viewBox="0 0 32 32" className="size-7" aria-hidden="true"><circle cx="16" cy="13" r="9" fill="none" stroke="currentColor" strokeWidth="2.6" /><path d="M16 22v8" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" /><circle cx="16" cy="13" r="4" fill="var(--mark)" stroke="currentColor" strokeWidth="1.5" /></svg>
-        <span className="hidden font-display text-xl font-bold sm:inline">Pinwire</span>
+        <span className="hidden whitespace-nowrap font-display text-lg font-bold sm:inline lg:text-xl">{APP_NAME}</span>
       </button>
 
       <div className="relative ml-auto w-full max-w-md" role="search">
@@ -242,55 +243,6 @@ function AllCountries({ open, onClose }: { open: boolean; onClose: () => void })
               ))}
             </ul>
           </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-/* ---------------- First visit ---------------- */
-function Welcome() {
-  const welcomed = useUser((s) => s.welcomed);
-  const setWelcomed = useUser((s) => s.setWelcomed);
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => setHydrated(true), []);
-  const open = hydrated && !welcomed;
-  const ref = useDialog<HTMLDivElement>(open, setWelcomed);
-  useEffect(() => { if (open) setTimeout(() => ref.current?.querySelector<HTMLElement>("button")?.focus(), 50); }, [open, ref]);
-
-  const steps = [
-    ["🏳️", "Tap a flag", "to see what is happening in that country."],
-    ["🔍", "Zoom in", "to find local stories from a city."],
-    ["🛡️", "Vote and review", "to tell others if a story can be trusted."],
-  ];
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div className="fixed inset-0 z-[80] grid place-items-center bg-ink/25 p-4 backdrop-blur-[3px]" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-          <motion.div
-            ref={ref}
-            data-dialog
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="welcome-h"
-            initial={{ scale: 0.9, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 260, damping: 24, delay: 0.3 }}
-            className="w-full max-w-md rounded-[32px] bg-surface p-7 shadow-[var(--shadow-lg)]"
-          >
-            <h2 id="welcome-h" className="font-display text-[40px] font-bold leading-[1.02]">World news, <span className="mark on">in plain English.</span></h2>
-            <ul className="mt-6 space-y-4">
-              {steps.map(([e, b, t], i) => (
-                <motion.li key={b} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0, transition: { delay: 0.5 + i * 0.1 } }} className="flex items-center gap-4">
-                  <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-paper text-xl" aria-hidden="true">{e}</span>
-                  <span><strong>{b}</strong> {t}</span>
-                </motion.li>
-              ))}
-            </ul>
-            <p className="mt-6 text-sm text-muted">
-              Every story in this prototype is a sample placeholder. By continuing you agree to the <Link href="/terms" className="font-medium text-cobalt underline">Terms</Link> and <Link href="/privacy" className="font-medium text-cobalt underline">Privacy Policy</Link>.
-            </p>
-            <button onClick={setWelcomed} className="mt-5 min-h-12 w-full rounded-full bg-ink font-semibold text-white transition hover:bg-ink/90 active:scale-[.98]">Start exploring</button>
-          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>

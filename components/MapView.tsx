@@ -114,9 +114,13 @@ export default function MapView({ onLevel }: { onLevel: (l: "world" | "local") =
         const el = document.createElement("button");
         el.className = "pw-local";
         el.style.setProperty("--d", `${i * 0.06}s`);
-        el.setAttribute("aria-label", `${p.name}: ${p.stories.length} local stories. Play.`);
+        el.setAttribute("aria-label", `${p.name}: read the local news`);
         el.innerHTML = `<span class="ring" aria-hidden="true"><span class="in">${EMOJI[p.stories[0].category] ?? "📰"}</span></span><span class="lbl" aria-hidden="true">${p.name}</span>`;
-        el.addEventListener("click", (e) => { e.stopPropagation(); useNav.getState().go({ country: c.code, place: p.id }); });
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          useUser.getState().markSeen(p.id);
+          useNav.getState().go({ country: c.code, place: p.id, story: p.stories[0]?.id ?? null, tab: undefined });
+        });
         localEls.current.set(p.id, el);
         new maplibregl.Marker({ element: el, anchor: "center", opacityWhenCovered: "0" }).setLngLat(p.at).addTo(map);
       }));

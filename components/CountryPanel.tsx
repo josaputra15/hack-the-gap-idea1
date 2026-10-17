@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "motion/react";
-import { Maximize2, Minimize2, X, MessageSquareText, MapPin, Flame, Clock, ShieldCheck, Swords } from "lucide-react";
-import { COUNTRY_INDEX, EMOJI, ago, type Story, type Country } from "@/lib/data";
-import { useNav, useUser, scoreOf, reviewsOf, trustOf } from "@/lib/store";
+import { Maximize2, Minimize2, X, MessageSquareText, MessageCircle, MapPin, Flame, Clock, ShieldCheck, Swords } from "lucide-react";
+import { COUNTRY_INDEX, EMOJI, ago, goingOnIn, type Story, type Country } from "@/lib/data";
+import { useNav, useUser, scoreOf, reviewsOf, trustOf, commentsOf } from "@/lib/store";
+import CommentSection from "./Comments";
 import { Vote, TrustBadge, Flag, TagChip } from "./bits";
 
 type Sort = "top" | "new" | "trusted" | "debated";
@@ -53,37 +54,39 @@ function Header({ c, full, titleRef, onFull, onClose }: { c: Country; full: bool
   const all = c.stories.flatMap((s) => reviewsOf(s, mine));
   const t = trustOf(all);
   return (
-    <motion.header layout="position" className={`flex items-center gap-4 ${full ? "mx-auto w-full max-w-6xl px-5 pt-6 pb-4 md:px-8 md:pt-8" : "px-5 pt-4 pb-3"}`}>
+    <motion.header layout="position" className={full ? "mx-auto w-full max-w-6xl px-5 pt-6 pb-4 md:px-8 md:pt-8" : "px-5 pt-4 pb-3"}>
       {!full && <div className="absolute left-1/2 top-2 h-1.5 w-11 -translate-x-1/2 rounded-full bg-line md:hidden" aria-hidden="true" />}
-      <motion.div layout className={`shrink-0 overflow-hidden rounded-xl shadow-[var(--shadow-sm)] ${full ? "h-14 w-[74px] md:h-20 md:w-[106px]" : "h-10 w-[54px]"}`}>
-        <Flag code={c.code} className="h-full w-full" />
-      </motion.div>
-      <div className="min-w-0 flex-1">
-        <motion.h2
-          layout="position"
-          id="country-title"
-          ref={titleRef}
-          tabIndex={-1}
-          className={`font-display font-bold leading-none ${full ? "text-4xl md:text-6xl" : "text-[28px]"}`}
-        >
-          {c.name}
-        </motion.h2>
-        <p className="mt-1.5 text-sm text-muted">
-          {c.stories.length} stories in {c.places.length} cities
-          {t && <> and <span className={t.pct >= 60 ? "text-[var(--trust)] font-medium" : "text-[var(--warn)] font-medium"}>{t.pct}% community trust</span></>}
-        </p>
+      <div className="flex items-center justify-between gap-3">
+        <motion.div layout className={`shrink-0 overflow-hidden rounded-xl shadow-[var(--shadow-sm)] ${full ? "h-14 w-[74px] md:h-20 md:w-[106px]" : "h-10 w-[54px]"}`}>
+          <Flag code={c.code} className="h-full w-full" />
+        </motion.div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onFull}
+            className="inline-flex h-11 items-center gap-2 rounded-full border border-line bg-surface px-4 text-sm font-semibold shadow-[var(--shadow-sm)] transition hover:border-line-strong active:scale-95"
+            aria-label={full ? "Exit full screen" : "Open full screen"}
+          >
+            {full ? <Minimize2 className="size-4" aria-hidden="true" /> : <Maximize2 className="size-4" aria-hidden="true" />}
+            <span className="hidden sm:inline">{full ? "Back to map" : "Full screen"}</span>
+          </button>
+          <button onClick={onClose} aria-label={`Close ${c.name}`} className="grid size-11 shrink-0 place-items-center rounded-full transition hover:bg-ink/5 active:scale-90">
+            <X className="size-5" aria-hidden="true" />
+          </button>
+        </div>
       </div>
-      <button
-        onClick={onFull}
-        className="inline-flex h-11 items-center gap-2 rounded-full border border-line bg-surface px-4 text-sm font-semibold shadow-[var(--shadow-sm)] transition hover:border-line-strong active:scale-95"
-        aria-label={full ? "Exit full screen" : "Open full screen"}
+      <motion.h2
+        layout="position"
+        id="country-title"
+        ref={titleRef}
+        tabIndex={-1}
+        className={`mt-3 font-display font-bold leading-[1.08] ${full ? "text-4xl md:text-6xl" : "text-[26px]"}`}
       >
-        {full ? <Minimize2 className="size-4" aria-hidden="true" /> : <Maximize2 className="size-4" aria-hidden="true" />}
-        <span className="hidden sm:inline">{full ? "Back to map" : "Full screen"}</span>
-      </button>
-      <button onClick={onClose} aria-label={`Close ${c.name}`} className="grid size-11 shrink-0 place-items-center rounded-full transition hover:bg-ink/5 active:scale-90">
-        <X className="size-5" aria-hidden="true" />
-      </button>
+        {goingOnIn(c.name)}
+      </motion.h2>
+      <p className="mt-1.5 text-sm text-muted">
+        {c.stories.length} stories in {c.places.length} cities
+        {t && <> and <span className={t.pct >= 60 ? "text-[var(--trust)] font-medium" : "text-[var(--warn)] font-medium"}>{t.pct}% community trust</span></>}
+      </p>
     </motion.header>
   );
 }
@@ -136,7 +139,7 @@ function Places({ c, big }: { c: Country; big?: boolean }) {
   return (
     <div className="no-scrollbar flex gap-4 overflow-x-auto py-1" aria-label="Local stories by city">
       {c.places.map((p) => (
-        <button key={p.id} onClick={() => go({ place: p.id })} className="group flex shrink-0 flex-col items-center gap-1.5" aria-label={`${p.name}: play ${p.stories.length} local stories`}>
+        <button key={p.id} onClick={() => { useUser.getState().markSeen(p.id); go({ place: p.id, story: p.stories[0]?.id, tab: undefined }); }} className="group flex shrink-0 flex-col items-center gap-1.5" aria-label={`${p.name}: read the local news`}>
           <span
             className={`grid place-items-center rounded-full p-[3px] transition group-hover:scale-105 ${big ? "size-[76px]" : "size-[60px]"}`}
             style={{ background: seen.includes(p.id) ? "var(--line-strong)" : "conic-gradient(from 210deg, var(--mark), #ff8a3d, #ff3d7f, var(--cobalt), var(--mark))" }}
@@ -155,6 +158,7 @@ function Places({ c, big }: { c: Country; big?: boolean }) {
 function StoryRow({ s, i }: { s: Story; i: number }) {
   const go = useNav((st) => st.go);
   const mine = useUser((st) => st.myReviews);
+  const myC = useUser((st) => st.myComments);
   return (
     <motion.li
       layout
@@ -164,9 +168,9 @@ function StoryRow({ s, i }: { s: Story; i: number }) {
     >
       <Vote story={s} />
       <div className="min-w-0">
-        <button onClick={() => go({ story: s.id })} className="block w-full rounded-lg text-left">
+        <button onClick={() => go({ story: s.id, tab: undefined })} className="block w-full rounded-lg text-left">
           <span className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-muted">
-            <span className="font-medium text-ink">{EMOJI[s.category]} {s.category}</span>
+            <span className="font-medium text-ink">{s.category}</span>
             <span>{s.place ?? "Nationwide"}</span>
             <span>{ago(s.hoursAgo)}</span>
           </span>
@@ -174,7 +178,12 @@ function StoryRow({ s, i }: { s: Story; i: number }) {
         </button>
         <span className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-muted">
           <TrustBadge story={s} />
-          <span className="inline-flex items-center gap-1"><MessageSquareText className="size-3.5" aria-hidden="true" />{reviewsOf(s, mine).length}<span className="sr-only"> reviews</span></span>
+          <button onClick={() => go({ story: s.id, tab: "comments" })} className="-my-1 inline-flex min-h-8 items-center gap-1 rounded-full px-2 hover:bg-paper hover:text-ink">
+            <MessageCircle className="size-3.5" aria-hidden="true" />{commentsOf(s, myC).length} comments
+          </button>
+          <button onClick={() => go({ story: s.id, tab: "reviews" })} className="-my-1 inline-flex min-h-8 items-center gap-1 rounded-full px-2 hover:bg-paper hover:text-ink">
+            <MessageSquareText className="size-3.5" aria-hidden="true" />{reviewsOf(s, mine).length} reviews
+          </button>
         </span>
       </div>
     </motion.li>
@@ -220,7 +229,7 @@ function FullBody({ c }: { c: Country }) {
             <SortTabs sort={sort} setSort={setSort} />
             <div className="no-scrollbar flex gap-2 overflow-x-auto" role="group" aria-label="Filter by topic">
               <FilterChip on={!cat} onClick={() => setCat(null)}>All topics</FilterChip>
-              {cats.map((k) => <FilterChip key={k} on={cat === k} onClick={() => setCat(cat === k ? null : k)}>{EMOJI[k]} {k}</FilterChip>)}
+              {cats.map((k) => <FilterChip key={k} on={cat === k} onClick={() => setCat(cat === k ? null : k)}>{k}</FilterChip>)}
             </div>
           </div>
           <LayoutGroup>
@@ -266,21 +275,24 @@ function FilterChip({ on, onClick, children }: { on: boolean; onClick: () => voi
 function StoryCard({ s, i, lead }: { s: Story; i: number; lead: boolean }) {
   const go = useNav((st) => st.go);
   const mine = useUser((st) => st.myReviews);
+  const myC = useUser((st) => st.myComments);
   const reviews = reviewsOf(s, mine);
+  const nc = commentsOf(s, myC).length;
+  const [open, setOpen] = useState(false);
   return (
     <motion.li
       layout
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i * 0.04, 0.4) } }}
       exit={{ opacity: 0, scale: 0.96 }}
-      className={`group flex flex-col rounded-3xl border border-line bg-surface p-5 transition-shadow hover:shadow-[var(--shadow-sm)] ${lead ? "sm:col-span-2 sm:p-7" : ""}`}
+      className={`group flex min-w-0 flex-col rounded-3xl border border-line bg-surface p-5 transition-shadow hover:shadow-[var(--shadow-sm)] ${lead ? "sm:col-span-2 sm:p-7" : ""}`}
     >
       <div className="mb-3 flex items-center gap-2 text-[13px] text-muted">
-        <span className="rounded-full bg-paper px-2.5 py-1 font-medium text-ink">{EMOJI[s.category]} {s.category}</span>
+        <span className="rounded-full bg-paper px-2.5 py-1 font-medium text-ink">{s.category}</span>
         <span>{s.place ?? "Nationwide"}</span>
         <span className="ml-auto">{ago(s.hoursAgo)}</span>
       </div>
-      <button onClick={() => go({ story: s.id })} className="flex-1 rounded-xl text-left">
+      <button onClick={() => go({ story: s.id, tab: undefined })} className="flex-1 rounded-xl text-left">
         <h3 className={`font-display font-bold leading-[1.1] ${lead ? "text-3xl md:text-[40px]" : "text-[22px]"}`}>
           <span className="mark">{s.headline}</span>
         </h3>
@@ -289,11 +301,33 @@ function StoryCard({ s, i, lead }: { s: Story; i: number; lead: boolean }) {
       <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-3">
         <Vote story={s} layout="row" />
         <TrustBadge story={s} />
-        <button onClick={() => go({ story: s.id })} className="ml-auto inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-cobalt hover:bg-cobalt-soft">
-          <MessageSquareText className="size-4" aria-hidden="true" />
-          {reviews.length ? `${reviews.length} reviews` : "Review"}
-        </button>
+        <span className="ml-auto flex gap-1">
+          <button
+            onClick={() => setOpen((o) => !o)}
+            aria-expanded={open}
+            className={`inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition ${open ? "bg-ink text-white" : "text-cobalt hover:bg-cobalt-soft"}`}
+          >
+            <MessageCircle className="size-4" aria-hidden="true" />{nc}<span className="sr-only"> comments</span><span aria-hidden="true" className={lead ? "" : "hidden sm:inline"}> comments</span>
+          </button>
+          <button onClick={() => go({ story: s.id, tab: "reviews" })} className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-cobalt hover:bg-cobalt-soft">
+            <MessageSquareText className="size-4" aria-hidden="true" />
+            {reviews.length ? `${reviews.length} reviews` : "Review"}
+          </button>
+        </span>
       </div>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 300, damping: 34 }}
+            className="-mx-1 overflow-hidden px-1"
+          >
+            <div className="pt-4"><CommentSection story={s} variant="inline" /></div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.li>
   );
 }

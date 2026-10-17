@@ -1,6 +1,6 @@
 # Pinwire — world news on a 3D map (prototype)
 
-Tap a flag on the globe to read a country's news. Open the country **full screen** to browse, filter, vote and review. Zoom in to see local, Snapchat-style story circles for cities. Every story has a plain-English headline, up/down votes, details, its source, and community reviews with quick tags (like "Spam" or "Not reliable (government source)").
+Tap a flag on the globe to read a country's news. Open the country **full screen** to browse, filter, vote and review. Zoom in to see local, Snapchat-style story circles for cities. Every story has a plain-English headline, up/down votes, details, its source, a **comment section** (replies, likes, report) with **one-tap quick comments** (like "Spam" or "This is not reliable (government source)"), and community reviews with a trust score.
 
 > All news is **placeholder data** (`lib/raw.json`). Nothing is real yet.
 
@@ -27,13 +27,14 @@ components/
   Pinwire.tsx            App shell: top bar + search, URL/back-button sync, "All countries", welcome
   MapView.tsx            3D globe, flag pins, local story circles, fly-to
   CountryPanel.tsx       Country drawer ↔ full-screen view (sort, topic filter, cards)
-  StoryModal.tsx         Story details, source, reviews (trust scale + quick tags + comments)
+  StoryModal.tsx         Story details, source, Comments tab, Reviews tab (trust scale + quick tags)
+  Comments.tsx           Comment section: quick comments, write box, replies, likes, report
   StoryViewer.tsx        Snapchat-style local stories
   bits.tsx               Vote control, tag chips, trust badge, flag
 lib/
   data.ts                Builds countries/places/stories from raw.json (+ sample reviews)
   raw.json               Placeholder news  ← replace with a real API
-  tags.ts                Quick review tags (add or rename them here)
+  tags.ts                Quick review tags and quick comments (add or rename them here)
   store.ts               Votes/reviews (saved in the browser) + navigation state
 public/                  Flags and an offline world outline map
 ```

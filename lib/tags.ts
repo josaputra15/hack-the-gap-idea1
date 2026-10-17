@@ -41,3 +41,40 @@ export const TONE_STYLE: Record<QuickTag["tone"], string> = {
   warn: "bg-[var(--warn-bg)] text-[var(--warn)] border-[var(--warn-line)]",
   flag: "bg-[var(--flag-bg)] text-[var(--flag)] border-[var(--flag-line)]",
 };
+
+/* Quick comments: one tap posts a short comment. Grouped so the row reads well. */
+export type QuickComment = { id: string; text: string; emoji: string; tone: "good" | "neutral" | "warn" | "flag" };
+
+export const QUICK_COMMENTS: QuickComment[] = [
+  // Report / warn
+  { id: "q-spam", text: "Spam", emoji: "🚫", tone: "flag" },
+  { id: "q-gov", text: "This is not reliable (government source)", emoji: "🏛️", tone: "warn" },
+  { id: "q-fake", text: "This looks like fake news", emoji: "❌", tone: "flag" },
+  { id: "q-clickbait", text: "Clickbait headline", emoji: "🪝", tone: "flag" },
+  { id: "q-source", text: "Needs a better source", emoji: "🔎", tone: "warn" },
+  { id: "q-confirmed", text: "Is this confirmed?", emoji: "❓", tone: "warn" },
+  { id: "q-biased", text: "This feels one-sided", emoji: "↔️", tone: "warn" },
+  { id: "q-old", text: "Old news", emoji: "⏳", tone: "warn" },
+  { id: "q-wrongplace", text: "Wrong location", emoji: "🗺️", tone: "warn" },
+  { id: "q-context", text: "Missing important context", emoji: "🧩", tone: "warn" },
+  // Reactions
+  { id: "q-thanks", text: "Thanks for sharing", emoji: "🙏", tone: "good" },
+  { id: "q-great", text: "Great news!", emoji: "🎉", tone: "good" },
+  { id: "q-clear", text: "Easy to understand, thanks", emoji: "🙂", tone: "good" },
+  { id: "q-true", text: "I live here, this is true", emoji: "📍", tone: "good" },
+  { id: "q-important", text: "This is important", emoji: "⭐", tone: "good" },
+  { id: "q-affects", text: "This affects me", emoji: "🙋", tone: "neutral" },
+  { id: "q-follow", text: "Following this story", emoji: "👀", tone: "neutral" },
+  { id: "q-more", text: "I want more details", emoji: "📖", tone: "neutral" },
+  { id: "q-sad", text: "Sad to hear this", emoji: "😢", tone: "neutral" },
+  { id: "q-safe", text: "Stay safe, everyone", emoji: "💛", tone: "neutral" },
+];
+
+export const QUICK_COMMENT_INDEX = new Map(QUICK_COMMENTS.map((q) => [q.id, q]));
+
+export const QUICK_TONE_STYLE: Record<QuickComment["tone"], string> = {
+  good: "border-[var(--trust-line)] bg-[var(--trust-bg)] text-[var(--trust)]",
+  neutral: "border-line bg-paper text-ink",
+  warn: "border-[var(--warn-line)] bg-[var(--warn-bg)] text-[var(--warn)]",
+  flag: "border-[var(--flag-line)] bg-[var(--flag-bg)] text-[var(--flag)]",
+};

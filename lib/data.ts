@@ -4,13 +4,22 @@
    Replace this module with a real API later; keep the exported types.
 ------------------------------------------------------------------- */
 import raw from "./raw.json";
-import { QUICK_TAGS } from "./tags";
+import { QUICK_TAGS, QUICK_COMMENTS } from "./tags";
 
 type Tuple = [string, string, string, string, string, string];
 type RawPlace = { name: string; at: [number, number]; stories: Tuple[] };
 type RawCountry = { code: string; name: string; center: [number, number]; national: Tuple[]; places: RawPlace[] };
 
-export type Comment = { id: string; name: string; text: string; ago: string };
+export type Comment = {
+  id: string;
+  name: string;
+  text: string;
+  ago: string; // "now", "5m", "3h"
+  likes: number;
+  quick?: string; // QuickComment id when posted with one tap
+  parent?: string; // reply to another comment
+  mine?: boolean;
+};
 export type Review = {
   id: string;
   name: string;
@@ -33,6 +42,7 @@ export type Story = {
   hoursAgo: number;
   score: number;
   reviews: Review[];
+  comments: Comment[];
   country: string;
   place: string | null;
   placeId: string | null;
@@ -100,6 +110,42 @@ function makeReviews(id: string, gov: boolean): Review[] {
   });
 }
 
+const COMMENT_TEXTS = [
+  "Does anyone know when this starts?",
+  "Good to see this explained so simply.",
+  "My family lives near there. Hoping it helps.",
+  "I'd like to read the full report.",
+  "Finally! This was needed for years.",
+  "Interesting. I didn't know this.",
+  "Who is paying for this?",
+  "Shared this with my friends.",
+];
+const REPLY_TEXTS = ["Same question here.", "I think it starts next month.", "Agreed!", "Good point."];
+
+function makeComments(id: string): Comment[] {
+  const h = hash(id + "c");
+  const n = h % 6;
+  const out: Comment[] = [];
+  for (let i = 0; i < n; i++) {
+    const r = hash(id + "c" + i);
+    const quick = r % 3 === 0 ? QUICK_COMMENTS[r % QUICK_COMMENTS.length] : undefined;
+    const c: Comment = {
+      id: `${id}-c${i}`,
+      name: NAMES[(r >> 1) % NAMES.length],
+      text: quick ? quick.text : COMMENT_TEXTS[r % COMMENT_TEXTS.length],
+      quick: quick?.id,
+      ago: `${(r % 20) + 1}h`,
+      likes: r % 25,
+    };
+    out.push(c);
+    if (!quick && r % 4 === 1) {
+      const rr = hash(c.id + "r");
+      out.push({ id: `${c.id}-r`, name: NAMES[rr % NAMES.length], text: REPLY_TEXTS[rr % REPLY_TEXTS.length], ago: `${(rr % 5) + 1}h`, likes: rr % 6, parent: c.id });
+    }
+  }
+  return out;
+}
+
 function story(t: Tuple, ctx: { code: string; place?: string; placeId?: string; at: [number, number] }): Story {
   const [category, headline, original, p1, p2, why] = t;
   const id = (ctx.code + "-" + headline).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60);
@@ -115,6 +161,7 @@ function story(t: Tuple, ctx: { code: string; place?: string; placeId?: string; 
     hoursAgo: (h % 23) + 1,
     score: (h % 240) + 12,
     reviews: makeReviews(id, src.kind === "government"),
+    comments: makeComments(id),
     country: ctx.code,
     place: ctx.place ?? null,
     placeId: ctx.placeId ?? null,
@@ -138,6 +185,14 @@ export const STORY_INDEX = new Map(COUNTRIES.flatMap((c) => c.stories.map((s) =>
 export const PLACE_INDEX = new Map(COUNTRIES.flatMap((c) => c.places.map((p) => [p.id, p] as const)));
 export const COUNTRY_INDEX = new Map(COUNTRIES.map((c) => [c.code, c] as const));
 export const CATEGORIES = [...new Set(COUNTRIES.flatMap((c) => c.stories.map((s) => s.category)))].sort();
+
+export const APP_NAME = "What's Going On?";
+
+/** Country names that take "the" in English ("the United States"). */
+export function goingOnIn(name: string) {
+  const place = name.startsWith("United ") ? `the ${name}` : name;
+  return `What's going on in ${place}?`;
+}
 
 export const flagSrc = (code: string) => `/flags/${code}.svg`;
 export const ago = (h: number) => (h < 1 ? "just now" : h === 1 ? "1 hour ago" : `${h} hours ago`);
