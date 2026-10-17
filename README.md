@@ -1,4 +1,11 @@
-# Pinwire — world news on a 3D map (prototype)
+# What's Going On In ____?
+---
+***
+___
+What's Going On In ___? is an interactive map-based news platform that helps people learn about any country or city through credibility-scored news, reviewed and flagged by the community from that region. Built by international students, it makes it easy to share your home country with friends and connect across cultures.
+---
+***
+___
 
 Tap a flag on the globe to read a country's news. Open the country **full screen** to browse, filter, vote and review. Zoom in to see local, Snapchat-style story circles for cities. Every story has a plain-English headline, up/down votes, details, its source, a **comment section** (replies, likes, report) with **one-tap quick comments** (like "Spam" or "This is not reliable (government source)"), and community reviews with a trust score.
 
